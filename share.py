@@ -83,7 +83,7 @@ def banner():
 [yellow]⚡[cyan] Version  : [green]1.0.0[/]
 [yellow]⚡[cyan] Dev      : [green]Ryo Evisu[/]
 [yellow]⚡[cyan] Status   : [red]Admin Access[/]""",
-        title="[white on cyan] INFORMATION [/]",
+        title="[white on red] INFORMATION [/]",
         width=65,
         style="bold bright_white",
     ))
@@ -94,7 +94,7 @@ def banner():
 [yellow]⚡[cyan] City     : [cyan]{sys_info['city']}[/]
 [yellow]⚡[cyan] Time     : [cyan]{sys_info['time']}[/]
 [yellow]⚡[cyan] Date     : [cyan]{sys_info['date']}[/]""",
-        title="[white on cyan] SYSTEM INFO [/]",
+        title="[white on red] SYSTEM INFO [/]",
         width=65,
         style="bold bright_white",
     ))
