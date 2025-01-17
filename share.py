@@ -23,20 +23,46 @@ config = {
     'target_shares': 0
 }
 
+import requests
+from datetime import datetime
+import pytz
+
+def get_system_info():
+    try:
+        ip_info = requests.get('https://ipapi.co/json/').json()
+        ph_tz = pytz.timezone('Asia/Manila')
+        ph_time = datetime.now(ph_tz)
+        return {
+            'ip': ip_info.get('ip', 'Unknown'),
+            'region': ip_info.get('region', 'Unknown'),
+            'city': ip_info.get('city', 'Unknown'),
+            'time': ph_time.strftime("%I:%M:%S %p"),
+            'date': ph_time.strftime("%B %d, %Y")
+        }
+    except:
+        return {
+            'ip': 'Unknown',
+            'region': 'Unknown',
+            'city': 'Unknown',
+            'time': datetime.now().strftime("%I:%M:%S %p"),
+            'date': datetime.now().strftime("%B %d, %Y")
+        }
+
 def banner():
     os.system('clear')
+    sys_info = get_system_info()
+    
     print(Panel(
-        r"""[bold red]●[bold yellow] ●[bold green] ●
-[bold red]██████╗ ██╗   ██╗ ██████╗ ████████╗ ██████╗  ██████╗ ██╗     
-[bold red]██╔══██╗╚██╗ ██╔╝██╔═══██╗╚══██╔══╝██╔═══██╗██╔═══██╗██║     
-[bold red]██████╔╝ ╚████╔╝ ██║   ██║   ██║   ██║   ██║██║   ██║██║     
-[bold red]██╔══██╗  ╚██╔╝  ██║   ██║   ██║   ██║   ██║██║   ██║██║     
-[bold white]██║  ██║   ██║   ╚██████╔╝   ██║   ╚██████╔╝╚██████╔╝███████╗
-[bold white]╚═╝  ╚═╝   ╚═╝    ╚═════╝    ╚═╝    ╚═════╝  ╚═════╝ ╚══════╝
-           [bold white on red]AUTOSHARE FACEBOOK - Coded by RyoEvisu[/]""",
+        r"""[red]●[yellow] ●[green] ●
+[cyan]██████╗░██╗░░░██╗░█████╗░
+[cyan]██╔══██╗╚██╗░██╔╝██╔══██╗
+[cyan]██████╔╝░╚████╔╝░██║░░██║
+[cyan]██╔══██╗░░╚██╔╝░░██║░░██║
+[cyan]██║░░██║░░░██║░░░╚█████╔╝
+[cyan]╚═╝░░╚═╝░░░╚═╝░░░░╚════╝░""",
+        title="[bright_white] SPAMSHARE [green]●[yellow] Active [/]",
         width=65,
         style="bold bright_white",
-        title="[bright_white] SPAMSHARE [green]●[yellow] Active [/]"
     ))
     
     print(Panel(
@@ -45,6 +71,17 @@ def banner():
 [yellow]⚡[white] Dev      : [green]Ryo Evisu[/]
 [yellow]⚡[white] Status   : [red]Admin Access[/]""",
         title="[white on red] INFORMATION [/]",
+        width=65,
+        style="bold bright_white",
+    ))
+    
+    print(Panel(
+        f"""[yellow]⚡[white] IP       : [cyan]{sys_info['ip']}[/]
+[yellow]⚡[white] Region   : [cyan]{sys_info['region']}[/]
+[yellow]⚡[white] City     : [cyan]{sys_info['city']}[/]
+[yellow]⚡[white] Time     : [cyan]{sys_info['time']}[/]
+[yellow]⚡[white] Date     : [cyan]{sys_info['date']}[/]""",
+        title="[white on red] SYSTEM INFO [/]",
         width=65,
         style="bold bright_white",
     ))
