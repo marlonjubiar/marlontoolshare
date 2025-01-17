@@ -170,51 +170,37 @@ async def main():
     
     # Load existing tokens
     config['tokens'] = load_tokens()
-    print(Panel(f"[white]Loaded [green]{len(config['tokens'])}[white] tokens", 
-        title="[white on red]>> [Loaded Tokens] <<[/]",
+    print(Panel(f"[bold white]Loaded [bold green]{len(config['tokens'])}[bold white] tokens", 
+        title="[bold bright_white]>> [Information] <<",
         width=65,
         style="bold bright_white"
     ))
     
     # Get new token if needed
-    token_text = "[white]Enter new token ([green]press Enter to skip[white])"
-    print(Panel(token_text, 
-        title="[white on red]>> [Input Token] <<[/]", 
-        width=65, 
-        style="bold bright_white", 
-        subtitle="╭─────", 
-        subtitle_align="left"
-    ))
-    new_token = console.input("[bright_white]   ╰─> ")
+    print(Panel(f"[bold white]Enter new token, make sure you have logged in with the correct account!", 
+        width=65, style="bold bright_white", title="[bold bright_white]>> [Token] <<", subtitle="╭─────", subtitle_align="left"))
+    new_token = console.input("[bold bright_white]   ╰─> ")
     
     if new_token:
         save_token(new_token)
         config['tokens'].append(new_token)
-        print(Panel("[green]Token saved successfully", 
-            title="[white on red]>> [Success] <<[/]",
-            width=65,
-            style="bold bright_white"
-        ))
+        print(Panel(f"[bold green]Token successfully saved to system!", 
+            width=65, style="bold bright_white", title="[bold bright_white]>> [Success] <<"))
     
     if not config['tokens']:
-        print(Panel("[red]No tokens available!", 
-            title="[white on red]>> [Error] <<[/]",
-            width=65,
-            style="bold bright_white"
-        ))
+        print(Panel(f"[bold red]No tokens available! Please add a token first.", 
+            width=65, style="bold bright_white", title="[bold bright_white]>> [Error] <<"))
         return
         
-    print(Panel("[white]Enter Post ID", 
-        title="[white on red]>> [Input Post] <<[/]",
-        width=65,
-        style="bold bright_white",
-        subtitle="╭─────",
-        subtitle_align="left"
-    ))
-    config['post_id'] = console.input("[bright_white]   ╰─> ")
+    print(Panel(f"[bold white]Enter Post ID, make sure the post has a[bold red] Follow[bold white] button!", 
+        width=65, style="bold bright_white", title="[bold bright_white]>> [Post ID] <<", subtitle="╭─────", subtitle_align="left"))
+    config['post_id'] = console.input("[bold bright_white]   ╰─> ")
+    
+    print(Panel(f"[bold white]Enter number of shares (recommended above[bold red] 5[bold white])", 
+        width=65, style="bold bright_white", title="[bold bright_white]>> [Share Count] <<", subtitle="╭─────", subtitle_align="left"))
 
     print(Panel("[white]Enter shares per token", 
-        title="[white on red]>> [Share Count] <<[/]",
+        title="[bright_white]>> [Share Count] <<",
         width=65,
         style="bold bright_white",
         subtitle="╭─────",
@@ -226,7 +212,7 @@ async def main():
     
     if not config['post_id'] or not share_count:
         print(Panel("[red]Invalid input!", 
-            title="[white on red]>> [Error] <<[/]",
+            title="[bright_white]>> [Error] <<",
             width=65,
             style="bold bright_white"
         ))
@@ -234,7 +220,7 @@ async def main():
     
     print(Panel(
         f"[white]Starting share process...\nTarget: [green]{config['target_shares']}[white] shares", 
-        title="[white on red]>> [Process Started] <<[/]",
+        title="[bright_white]>> [Process Started] <<",
         width=65,
         style="bold bright_white"
     ))
@@ -250,7 +236,7 @@ async def main():
     
     print(Panel(
         f"[green]Process completed!\n[white]Total shares: [green]{share_manager.global_share_count}", 
-        title="[white on red]>> [Completed] <<[/]",
+        title="[bright_white]>> [Completed] <<",
         width=65,
         style="bold bright_white"
     ))
@@ -260,19 +246,19 @@ if __name__ == "__main__":
         asyncio.run(main())
     except KeyboardInterrupt:
         print(Panel("[white]Script terminated by user", 
-            title="[white on red]>> [Terminated] <<[/]",
+            title="[bright_white]>> [Terminated] <<",
             width=65,
             style="bold bright_white"
         ))
     except Exception as e:
         print(Panel(f"[red]{str(e)}", 
-            title="[white on red]>> [Error] <<[/]",
+            title="[bright_white]>> [Error] <<",
             width=65,
             style="bold bright_white"
         ))
     
     print(Panel("[white]Press Enter to exit...", 
-        title="[white on red]>> [Exit] <<[/]",
+        title="[bright_white]>> [Exit] <<",
         width=65,
         style="bold bright_white",
         subtitle="╭─────",
