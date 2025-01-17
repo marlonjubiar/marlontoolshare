@@ -2,15 +2,17 @@ import asyncio
 import aiohttp
 import sys
 import os
-from typing import List
+from typing import List, Optional, Dict
 import json
 from datetime import datetime
 from rich.console import Console
 from rich import print
 from rich.columns import Columns
 from rich.panel import Panel
+import re
 import requests
 import pytz
+from typing import Union
 
 console = Console()
 os.system('clear')
@@ -25,9 +27,28 @@ config = {
     'target_shares': 0
 }
 
-def get_system_info():
+def validate_token(token: str) -> bool:
+    if not token:
+        return False
+    token_pattern = r'^[A-Za-z0-9_-]{20,}$'
+    return bool(re.match(token_pattern, token))
+
+def validate_post_id(post_id: str) -> bool:
+    if not post_id:
+        return False
+    post_id_pattern = r'^[0-9]+$'
+    return bool(re.match(post_id_pattern, post_id))
+
+def validate_share_count(count: str) -> bool:
     try:
-        ip_info = requests.get('https://ipapi.co/json/').json()
+        count = int(count)
+        return 0 < count <= 1000
+    except ValueError:
+        return False
+
+def get_system_info() -> Dict[str, str]:
+    try:
+        ip_info = requests.get('https://ipapi.co/json/', timeout=5).json()
         ph_tz = pytz.timezone('Asia/Manila')
         ph_time = datetime.now(ph_tz)
         return {
@@ -68,7 +89,7 @@ def banner():
 [yellow]⚡[cyan] Version  : [green]1.0.0[/]
 [yellow]⚡[cyan] Dev      : [green]Ryo Evisu[/]
 [yellow]⚡[cyan] Status   : [red]Admin Access[/]""",
-        title="[white on red] INFORMATION [/]",
+        title="[white on cyan] INFORMATION [/]",
         width=65,
         style="bold bright_white",
     ))
@@ -79,7 +100,7 @@ def banner():
 [yellow]⚡[cyan] City     : [cyan]{sys_info['city']}[/]
 [yellow]⚡[cyan] Time     : [cyan]{sys_info['time']}[/]
 [yellow]⚡[cyan] Date     : [cyan]{sys_info['date']}[/]""",
-        title="[white on red] SYSTEM INFO [/]",
+        title="[white on cyan] SYSTEM INFO [/]",
         width=65,
         style="bold bright_white",
     ))
@@ -89,36 +110,45 @@ def load_tokens() -> List[str]:
         os.makedirs(os.path.dirname(TOKEN_PATH), exist_ok=True)
         if os.path.exists(TOKEN_PATH):
             with open(TOKEN_PATH, 'r') as f:
-                return [line.strip() for line in f if line.strip()]
+                return [line.strip() for line in f if line.strip() and validate_token(line.strip())]
         return []
     except Exception as e:
-        print(Panel(f"[red]Error loading tokens: {str(e)}", 
+        console.print(Panel(f"[red]Error loading tokens: {str(e)}", 
             title="[bright_white]>> [Error] <<",
             width=65,
             style="bold bright_white"
         ))
         return []
 
-def save_token(token: str):
+def save_token(token: str) -> bool:
     try:
+        if not validate_token(token):
+            return False
         os.makedirs(os.path.dirname(TOKEN_PATH), exist_ok=True)
         with open(TOKEN_PATH, 'a') as f:
             f.write(f"{token}\n")
+        return True
     except Exception as e:
-        print(Panel(f"[red]Error saving token: {str(e)}", 
+        console.print(Panel(f"[red]Error saving token: {str(e)}", 
             title="[bright_white]>> [Error] <<",
             width=65,
             style="bold bright_white"
         ))
+        return False
 
 def load_global_share_count() -> int:
     try:
         if os.path.exists(GLOBAL_SHARE_COUNT_FILE):
             with open(GLOBAL_SHARE_COUNT_FILE, 'r') as f:
                 data = json.load(f)
-                return data.get('count', 0)
+                return int(data.get('count', 0))
         return 0
-    except Exception:
+    except Exception as e:
+        console.print(Panel(f"[red]Error loading share count: {str(e)}", 
+            title="[bright_white]>> [Error] <<",
+            width=65,
+            style="bold bright_white"
+        ))
         return 0
 
 def save_global_share_count(count: int):
@@ -126,28 +156,17 @@ def save_global_share_count(count: int):
         with open(GLOBAL_SHARE_COUNT_FILE, 'w') as f:
             json.dump({'count': count}, f)
     except Exception as e:
-        print(Panel(f"[red]Error saving share count: {str(e)}", 
+        console.print(Panel(f"[red]Error saving share count: {str(e)}", 
             title="[bright_white]>> [Error] <<",
             width=65,
             style="bold bright_white"
         ))
 
-def validate_token(token: str) -> bool:
-    return bool(token and len(token) >= 50)
-
-def validate_post_id(post_id: str) -> bool:
-    return bool(post_id and post_id.replace('_', '').isdigit())
-
-def validate_share_count(count: str) -> bool:
-    try:
-        num = int(count)
-        return num > 0 and num <= 1000
-    except ValueError:
-        return False
-
 class ShareManager:
     def __init__(self):
         self.global_share_count = load_global_share_count()
+        self.error_count = 0
+        self.success_count = 0
         
     async def share(self, session: aiohttp.ClientSession, token: str, share_count: int):
         headers = {
@@ -164,7 +183,8 @@ class ShareManager:
             'host': 'graph.facebook.com'
         }
         
-        while config['total_shares'] < config['target_shares']:
+        retries = 3
+        while config['total_shares'] < config['target_shares'] and retries > 0:
             try:
                 async with session.post(
                     'https://graph.facebook.com/me/feed',
@@ -173,32 +193,30 @@ class ShareManager:
                         'published': '0',
                         'access_token': token
                     },
-                    headers=headers
+                    headers=headers,
+                    timeout=30
                 ) as response:
                     data = await response.json()
                     if 'id' in data:
                         config['total_shares'] += 1
                         self.global_share_count += 1
+                        self.success_count += 1
                         save_global_share_count(self.global_share_count)
                         
                         timestamp = datetime.now().strftime("%H:%M:%S")
                         console.print(f"[cyan][{timestamp}][/cyan][green] Share Completed [yellow]{config['post_id']} [red]{config['total_shares']}/{config['target_shares']}")
                     else:
-                        print(Panel(f"[red]Share failed: {data.get('error', {}).get('message', 'Unknown error')}", 
-                            title="[bright_white]>> [Error] <<",
-                            width=65,
-                            style="bold bright_white"
-                        ))
-                        return
+                        self.error_count += 1
+                        retries -= 1
+                        if 'error' in data:
+                            console.print(f"[red]Error: {data['error'].get('message', 'Unknown error')}")
             except Exception as e:
-                print(Panel(f"[red]Share error: {str(e)}", 
-                    title="[bright_white]>> [Error] <<",
-                    width=65,
-                    style="bold bright_white"
-                ))
-                return
+                self.error_count += 1
+                retries -= 1
+                console.print(f"[red]Share failed: {str(e)}")
+                await asyncio.sleep(1)
 
-async def get_user_input(prompt: str, validation_func, error_message: str):
+async def get_user_input(prompt: str, validator_func, error_message: str) -> Optional[str]:
     while True:
         print(Panel(prompt, 
             title="[bright_white]>> [Input] <<",
@@ -209,7 +227,10 @@ async def get_user_input(prompt: str, validation_func, error_message: str):
         ))
         user_input = console.input("[bright_white]   ╰─> ")
         
-        if validation_func(user_input):
+        if user_input.lower() == 'exit':
+            return None
+            
+        if validator_func(user_input):
             return user_input
         else:
             print(Panel(f"[red]{error_message}", 
@@ -223,29 +244,23 @@ async def main():
         banner()
         
         config['tokens'] = load_tokens()
-        print(Panel(f"[cyan]Loaded [green]{len(config['tokens'])}[cyan] tokens", 
+        print(Panel(f"[white]Loaded [green]{len(config['tokens'])}[white] tokens", 
             title="[bright_white]>> [Information] <<",
             width=65,
             style="bold bright_white"
         ))
         
-        token_text = "[cyan]Enter new token ([green]press Enter to skip[cyan])"
-        print(Panel(token_text, title="[bright_white]>> [Input Token] <<", 
-            width=65, style="bold bright_white", subtitle="╭─────", subtitle_align="left"))
-        new_token = console.input("[bright_white]   ╰─> ")
+        new_token = await get_user_input(
+            "[white]Enter new token ([green]press Enter to skip[white])",
+            lambda x: not x or validate_token(x),
+            "Invalid token format. Please enter a valid token or press Enter to skip."
+        )
         
         if new_token:
-            if validate_token(new_token):
-                save_token(new_token)
+            if save_token(new_token):
                 config['tokens'].append(new_token)
                 print(Panel("[green]Token saved successfully", 
                     title="[bright_white]>> [Success] <<",
-                    width=65,
-                    style="bold bright_white"
-                ))
-            else:
-                print(Panel("[red]Invalid token format!", 
-                    title="[bright_white]>> [Error] <<",
                     width=65,
                     style="bold bright_white"
                 ))
@@ -257,24 +272,30 @@ async def main():
                 style="bold bright_white"
             ))
             return
-        
+            
         config['post_id'] = await get_user_input(
-            "[cyan]Enter Post ID",
+            "[white]Enter Post ID",
             validate_post_id,
-            "Invalid Post ID format! Please enter a valid Facebook post ID."
+            "Invalid Post ID format. Please enter a valid numeric Post ID."
         )
         
-        share_count_str = await get_user_input(
-            "[cyan]Enter shares per token (1-1000)",
+        if not config['post_id']:
+            return
+            
+        share_count_input = await get_user_input(
+            "[white]Enter shares per token (1-1000)",
             validate_share_count,
-            "Invalid share count! Please enter a number between 1 and 1000."
+            "Invalid share count. Please enter a number between 1 and 1000."
         )
-        share_count = int(share_count_str)
         
+        if not share_count_input:
+            return
+            
+        share_count = int(share_count_input)
         config['target_shares'] = share_count * len(config['tokens'])
         
         print(Panel(
-            f"[cyan]Starting share process...\nTarget: [green]{config['target_shares']}[cyan] shares", 
+            f"[white]Starting share process...\nTarget: [green]{config['target_shares']}[white] shares", 
             title="[bright_white]>> [Process Started] <<",
             width=65,
             style="bold bright_white"
@@ -290,24 +311,17 @@ async def main():
             await asyncio.gather(*tasks)
         
         print(Panel(
-            f"[green]Process completed!\n[cyan]Total shares: [green]{share_manager.global_share_count}", 
+            f"""[green]Process completed!
+[white]Total shares: [green]{share_manager.global_share_count}
+[white]Successful: [green]{share_manager.success_count}
+[white]Failed: [red]{share_manager.error_count}""", 
             title="[bright_white]>> [Completed] <<",
             width=65,
             style="bold bright_white"
         ))
 
-    except Exception as e:
-        print(Panel(f"[red]Main process error: {str(e)}", 
-            title="[bright_white]>> [Error] <<",
-            width=65,
-            style="bold bright_white"
-        ))
-
-if __name__ == "__main__":
-    try:
-        asyncio.run(main())
     except KeyboardInterrupt:
-        print(Panel("[cyan]Script terminated by user", 
+        print(Panel("[white]Script terminated by user", 
             title="[bright_white]>> [Terminated] <<",
             width=65,
             style="bold bright_white"
@@ -318,12 +332,15 @@ if __name__ == "__main__":
             width=65,
             style="bold bright_white"
         ))
-    
-    print(Panel("[cyan]Press Enter to exit...", 
-        title="[bright_white]>> [Exit] <<",
-        width=65,
-        style="bold bright_white",
-        subtitle="╭─────",
-        subtitle_align="left"
-    ))
-    console.input("[bright_white]   ╰─> ")
+    finally:
+        print(Panel("[white]Press Enter to exit...", 
+            title="[bright_white]>> [Exit] <<",
+            width=65,
+            style="bold bright_white",
+            subtitle="╭─────",
+            subtitle_align="left"
+        ))
+        console.input("[bright_white]   ╰─> ")
+
+if __name__ == "__main__":
+    asyncio.run(main())
