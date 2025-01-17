@@ -9,6 +9,8 @@ from rich.console import Console
 from rich import print
 from rich.columns import Columns
 from rich.panel import Panel
+import requests
+import pytz
 
 console = Console()
 os.system('clear')
@@ -22,10 +24,6 @@ config = {
     'total_shares': 0,
     'target_shares': 0
 }
-
-import requests
-from datetime import datetime
-import pytz
 
 def get_system_info():
     try:
@@ -66,21 +64,21 @@ def banner():
     ))
     
     print(Panel(
-        """[yellow]⚡[white] Tool     : [green]SpamShare[/]
-[yellow]⚡[white] Version  : [green]1.0.0[/]
-[yellow]⚡[white] Dev      : [green]Ryo Evisu[/]
-[yellow]⚡[white] Status   : [red]Admin Access[/]""",
+        """[yellow]⚡[cyan] Tool     : [green]SpamShare[/]
+[yellow]⚡[cyan] Version  : [green]1.0.0[/]
+[yellow]⚡[cyan] Dev      : [green]Ryo Evisu[/]
+[yellow]⚡[cyan] Status   : [red]Admin Access[/]""",
         title="[white on red] INFORMATION [/]",
         width=65,
         style="bold bright_white",
     ))
     
     print(Panel(
-        f"""[yellow]⚡[white] IP       : [cyan]{sys_info['ip']}[/]
-[yellow]⚡[white] Region   : [cyan]{sys_info['region']}[/]
-[yellow]⚡[white] City     : [cyan]{sys_info['city']}[/]
-[yellow]⚡[white] Time     : [cyan]{sys_info['time']}[/]
-[yellow]⚡[white] Date     : [cyan]{sys_info['date']}[/]""",
+        f"""[yellow]⚡[cyan] IP       : [cyan]{sys_info['ip']}[/]
+[yellow]⚡[cyan] Region   : [cyan]{sys_info['region']}[/]
+[yellow]⚡[cyan] City     : [cyan]{sys_info['city']}[/]
+[yellow]⚡[cyan] Time     : [cyan]{sys_info['time']}[/]
+[yellow]⚡[cyan] Date     : [cyan]{sys_info['date']}[/]""",
         title="[white on red] SYSTEM INFO [/]",
         width=65,
         style="bold bright_white",
@@ -93,7 +91,12 @@ def load_tokens() -> List[str]:
             with open(TOKEN_PATH, 'r') as f:
                 return [line.strip() for line in f if line.strip()]
         return []
-    except Exception:
+    except Exception as e:
+        print(Panel(f"[red]Error loading tokens: {str(e)}", 
+            title="[bright_white]>> [Error] <<",
+            width=65,
+            style="bold bright_white"
+        ))
         return []
 
 def save_token(token: str):
@@ -101,8 +104,12 @@ def save_token(token: str):
         os.makedirs(os.path.dirname(TOKEN_PATH), exist_ok=True)
         with open(TOKEN_PATH, 'a') as f:
             f.write(f"{token}\n")
-    except Exception:
-        pass
+    except Exception as e:
+        print(Panel(f"[red]Error saving token: {str(e)}", 
+            title="[bright_white]>> [Error] <<",
+            width=65,
+            style="bold bright_white"
+        ))
 
 def load_global_share_count() -> int:
     try:
@@ -118,8 +125,25 @@ def save_global_share_count(count: int):
     try:
         with open(GLOBAL_SHARE_COUNT_FILE, 'w') as f:
             json.dump({'count': count}, f)
-    except Exception:
-        pass
+    except Exception as e:
+        print(Panel(f"[red]Error saving share count: {str(e)}", 
+            title="[bright_white]>> [Error] <<",
+            width=65,
+            style="bold bright_white"
+        ))
+
+def validate_token(token: str) -> bool:
+    return bool(token and len(token) >= 50)
+
+def validate_post_id(post_id: str) -> bool:
+    return bool(post_id and post_id.replace('_', '').isdigit())
+
+def validate_share_count(count: str) -> bool:
+    try:
+        num = int(count)
+        return num > 0 and num <= 1000
+    except ValueError:
+        return False
 
 class ShareManager:
     def __init__(self):
@@ -157,104 +181,133 @@ class ShareManager:
                         self.global_share_count += 1
                         save_global_share_count(self.global_share_count)
                         
-                        # Format timestamp and progress
                         timestamp = datetime.now().strftime("%H:%M:%S")
                         console.print(f"[cyan][{timestamp}][/cyan][green] Share Completed [yellow]{config['post_id']} [red]{config['total_shares']}/{config['target_shares']}")
                     else:
+                        print(Panel(f"[red]Share failed: {data.get('error', {}).get('message', 'Unknown error')}", 
+                            title="[bright_white]>> [Error] <<",
+                            width=65,
+                            style="bold bright_white"
+                        ))
                         return
-            except Exception:
+            except Exception as e:
+                print(Panel(f"[red]Share error: {str(e)}", 
+                    title="[bright_white]>> [Error] <<",
+                    width=65,
+                    style="bold bright_white"
+                ))
                 return
 
-async def main():
-    banner()
-    
-    # Load existing tokens
-    config['tokens'] = load_tokens()
-    print(Panel(f"[white]Loaded [green]{len(config['tokens'])}[white] tokens", 
-        title="[bright_white]>> [Information] <<",
-        width=65,
-        style="bold bright_white"
-    ))
-    
-    # Get new token if needed
-    token_text = "[white]Enter new token ([green]press Enter to skip[white])"
-    print(Panel(token_text, title="[bright_white]>> [Input Token] <<", 
-        width=65, style="bold bright_white", subtitle="╭─────", subtitle_align="left"))
-    new_token = console.input("[bright_white]   ╰─> ")
-    
-    if new_token:
-        save_token(new_token)
-        config['tokens'].append(new_token)
-        print(Panel("[green]Token saved successfully", 
-            title="[bright_white]>> [Success] <<",
+async def get_user_input(prompt: str, validation_func, error_message: str):
+    while True:
+        print(Panel(prompt, 
+            title="[bright_white]>> [Input] <<",
             width=65,
-            style="bold bright_white"
+            style="bold bright_white",
+            subtitle="╭─────",
+            subtitle_align="left"
         ))
-    
-    if not config['tokens']:
-        print(Panel("[red]No tokens available!", 
-            title="[bright_white]>> [Error] <<",
-            width=65,
-            style="bold bright_white"
-        ))
-        return
+        user_input = console.input("[bright_white]   ╰─> ")
         
-    print(Panel("[white]Enter Post ID", 
-        title="[bright_white]>> [Input Post] <<",
-        width=65,
-        style="bold bright_white",
-        subtitle="╭─────",
-        subtitle_align="left"
-    ))
-    config['post_id'] = console.input("[bright_white]   ╰─> ")
+        if validation_func(user_input):
+            return user_input
+        else:
+            print(Panel(f"[red]{error_message}", 
+                title="[bright_white]>> [Error] <<",
+                width=65,
+                style="bold bright_white"
+            ))
 
-    print(Panel("[white]Enter shares per token", 
-        title="[bright_white]>> [Share Count] <<",
-        width=65,
-        style="bold bright_white",
-        subtitle="╭─────",
-        subtitle_align="left"
-    ))
-    share_count = int(console.input("[bright_white]   ╰─> "))
-    
-    config['target_shares'] = share_count * len(config['tokens'])
-    
-    if not config['post_id'] or not share_count:
-        print(Panel("[red]Invalid input!", 
+async def main():
+    try:
+        banner()
+        
+        config['tokens'] = load_tokens()
+        print(Panel(f"[cyan]Loaded [green]{len(config['tokens'])}[cyan] tokens", 
+            title="[bright_white]>> [Information] <<",
+            width=65,
+            style="bold bright_white"
+        ))
+        
+        token_text = "[cyan]Enter new token ([green]press Enter to skip[cyan])"
+        print(Panel(token_text, title="[bright_white]>> [Input Token] <<", 
+            width=65, style="bold bright_white", subtitle="╭─────", subtitle_align="left"))
+        new_token = console.input("[bright_white]   ╰─> ")
+        
+        if new_token:
+            if validate_token(new_token):
+                save_token(new_token)
+                config['tokens'].append(new_token)
+                print(Panel("[green]Token saved successfully", 
+                    title="[bright_white]>> [Success] <<",
+                    width=65,
+                    style="bold bright_white"
+                ))
+            else:
+                print(Panel("[red]Invalid token format!", 
+                    title="[bright_white]>> [Error] <<",
+                    width=65,
+                    style="bold bright_white"
+                ))
+        
+        if not config['tokens']:
+            print(Panel("[red]No tokens available!", 
+                title="[bright_white]>> [Error] <<",
+                width=65,
+                style="bold bright_white"
+            ))
+            return
+        
+        config['post_id'] = await get_user_input(
+            "[cyan]Enter Post ID",
+            validate_post_id,
+            "Invalid Post ID format! Please enter a valid Facebook post ID."
+        )
+        
+        share_count_str = await get_user_input(
+            "[cyan]Enter shares per token (1-1000)",
+            validate_share_count,
+            "Invalid share count! Please enter a number between 1 and 1000."
+        )
+        share_count = int(share_count_str)
+        
+        config['target_shares'] = share_count * len(config['tokens'])
+        
+        print(Panel(
+            f"[cyan]Starting share process...\nTarget: [green]{config['target_shares']}[cyan] shares", 
+            title="[bright_white]>> [Process Started] <<",
+            width=65,
+            style="bold bright_white"
+        ))
+        
+        share_manager = ShareManager()
+        
+        async with aiohttp.ClientSession() as session:
+            tasks = []
+            for token in config['tokens']:
+                task = asyncio.create_task(share_manager.share(session, token, share_count))
+                tasks.append(task)
+            await asyncio.gather(*tasks)
+        
+        print(Panel(
+            f"[green]Process completed!\n[cyan]Total shares: [green]{share_manager.global_share_count}", 
+            title="[bright_white]>> [Completed] <<",
+            width=65,
+            style="bold bright_white"
+        ))
+
+    except Exception as e:
+        print(Panel(f"[red]Main process error: {str(e)}", 
             title="[bright_white]>> [Error] <<",
             width=65,
             style="bold bright_white"
         ))
-        return
-    
-    print(Panel(
-        f"[white]Starting share process...\nTarget: [green]{config['target_shares']}[white] shares", 
-        title="[bright_white]>> [Process Started] <<",
-        width=65,
-        style="bold bright_white"
-    ))
-    
-    share_manager = ShareManager()
-    
-    async with aiohttp.ClientSession() as session:
-        tasks = []
-        for token in config['tokens']:
-            task = asyncio.create_task(share_manager.share(session, token, share_count))
-            tasks.append(task)
-        await asyncio.gather(*tasks)
-    
-    print(Panel(
-        f"[green]Process completed!\n[white]Total shares: [green]{share_manager.global_share_count}", 
-        title="[bright_white]>> [Completed] <<",
-        width=65,
-        style="bold bright_white"
-    ))
 
 if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        print(Panel("[white]Script terminated by user", 
+        print(Panel("[cyan]Script terminated by user", 
             title="[bright_white]>> [Terminated] <<",
             width=65,
             style="bold bright_white"
@@ -266,7 +319,7 @@ if __name__ == "__main__":
             style="bold bright_white"
         ))
     
-    print(Panel("[white]Press Enter to exit...", 
+    print(Panel("[cyan]Press Enter to exit...", 
         title="[bright_white]>> [Exit] <<",
         width=65,
         style="bold bright_white",
