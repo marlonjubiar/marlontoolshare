@@ -27,12 +27,6 @@ config = {
     'target_shares': 0
 }
 
-def validate_token(token: str) -> bool:
-    if not token:
-        return False
-    token_pattern = r'^[A-Za-z0-9_-]{20,}$'
-    return bool(re.match(token_pattern, token))
-
 def validate_post_id(post_id: str) -> bool:
     if not post_id:
         return False
@@ -107,10 +101,9 @@ def banner():
 
 def load_tokens() -> List[str]:
     try:
-        os.makedirs(os.path.dirname(TOKEN_PATH), exist_ok=True)
         if os.path.exists(TOKEN_PATH):
             with open(TOKEN_PATH, 'r') as f:
-                return [line.strip() for line in f if line.strip() and validate_token(line.strip())]
+                return [line.strip() for line in f if line.strip()]
         return []
     except Exception as e:
         console.print(Panel(f"[red]Error loading tokens: {str(e)}", 
@@ -119,22 +112,6 @@ def load_tokens() -> List[str]:
             style="bold bright_white"
         ))
         return []
-
-def save_token(token: str) -> bool:
-    try:
-        if not validate_token(token):
-            return False
-        os.makedirs(os.path.dirname(TOKEN_PATH), exist_ok=True)
-        with open(TOKEN_PATH, 'a') as f:
-            f.write(f"{token}\n")
-        return True
-    except Exception as e:
-        console.print(Panel(f"[red]Error saving token: {str(e)}", 
-            title="[bright_white]>> [Error] <<",
-            width=65,
-            style="bold bright_white"
-        ))
-        return False
 
 def load_global_share_count() -> int:
     try:
@@ -250,23 +227,8 @@ async def main():
             style="bold bright_white"
         ))
         
-        new_token = await get_user_input(
-            "[white]Enter new token ([green]press Enter to skip[white])",
-            lambda x: not x or validate_token(x),
-            "Invalid token format. Please enter a valid token or press Enter to skip."
-        )
-        
-        if new_token:
-            if save_token(new_token):
-                config['tokens'].append(new_token)
-                print(Panel("[green]Token saved successfully", 
-                    title="[bright_white]>> [Success] <<",
-                    width=65,
-                    style="bold bright_white"
-                ))
-        
         if not config['tokens']:
-            print(Panel("[red]No tokens available!", 
+            print(Panel("[red]No tokens available! Please add tokens to the token file first.", 
                 title="[bright_white]>> [Error] <<",
                 width=65,
                 style="bold bright_white"
