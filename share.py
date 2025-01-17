@@ -9,6 +9,8 @@ from rich.console import Console
 from rich import print
 from rich.columns import Columns
 from rich.panel import Panel
+import requests
+import pytz
 
 console = Console()
 os.system('clear')
@@ -22,10 +24,6 @@ config = {
     'total_shares': 0,
     'target_shares': 0
 }
-
-import requests
-from datetime import datetime
-import pytz
 
 def get_system_info():
     try:
@@ -55,33 +53,25 @@ def banner():
     print(Panel(
         r"""[red]●[yellow] ●[green] ●
 [cyan]██████╗░██╗░░░██╗░█████╗░
-[cyan]██╔══██╗╚██╗░██╔╝██╔══██╗
-[cyan]██████╔╝░╚████╔╝░██║░░██║
-[cyan]██╔══██╗░░╚██╔╝░░██║░░██║
-[cyan]██║░░██║░░░██║░░░╚█████╔╝
-[cyan]╚═╝░░╚═╝░░░╚═╝░░░░╚════╝░""",
+[cyan]██╔══██╗╚██╗░██╔╝██╔══██╗      [white on red] INFORMATION [/]
+[cyan]██████╔╝░╚████╔╝░██║░░██║      [white]════════════════════
+[cyan]██╔══██╗░░╚██╔╝░░██║░░██║      [yellow]⚡[white] Tool     : [green]SpamShare[/]
+[cyan]██║░░██║░░░██║░░░╚█████╔╝      [yellow]⚡[white] Version  : [green]1.0.0[/]
+[cyan]╚═╝░░╚═╝░░░╚═╝░░░░╚════╝░      [yellow]⚡[white] Dev      : [green]Ryo Evisu[/]
+                                [yellow]⚡[white] Status   : [red]Admin Access[/]""",
         title="[bright_white] SPAMSHARE [green]●[yellow] Active [/]",
         width=65,
         style="bold bright_white",
     ))
     
     print(Panel(
-        """[yellow]⚡[white] Tool     : [green]SpamShare[/]
-[yellow]⚡[white] Version  : [green]1.0.0[/]
-[yellow]⚡[white] Dev      : [green]Ryo Evisu[/]
-[yellow]⚡[white] Status   : [red]Admin Access[/]""",
-        title="[white on red] INFORMATION [/]",
-        width=65,
-        style="bold bright_white",
-    ))
-    
-    print(Panel(
-        f"""[yellow]⚡[white] IP       : [cyan]{sys_info['ip']}[/]
+        f"""[white]════════════════════[/]
+[yellow]⚡[white] IP       : [cyan]{sys_info['ip']}[/]
 [yellow]⚡[white] Region   : [cyan]{sys_info['region']}[/]
 [yellow]⚡[white] City     : [cyan]{sys_info['city']}[/]
 [yellow]⚡[white] Time     : [cyan]{sys_info['time']}[/]
 [yellow]⚡[white] Date     : [cyan]{sys_info['date']}[/]""",
-        title="[white on red] SYSTEM INFO [/]",
+        title="[white on red] YOUR INFORMATION [/]",
         width=65,
         style="bold bright_white",
     ))
@@ -96,11 +86,10 @@ def load_tokens() -> List[str]:
     except Exception:
         return []
 
-def save_token(token: str):
+def save_global_share_count(count: int):
     try:
-        os.makedirs(os.path.dirname(TOKEN_PATH), exist_ok=True)
-        with open(TOKEN_PATH, 'a') as f:
-            f.write(f"{token}\n")
+        with open(GLOBAL_SHARE_COUNT_FILE, 'w') as f:
+            json.dump({'count': count}, f)
     except Exception:
         pass
 
@@ -113,13 +102,6 @@ def load_global_share_count() -> int:
         return 0
     except Exception:
         return 0
-
-def save_global_share_count(count: int):
-    try:
-        with open(GLOBAL_SHARE_COUNT_FILE, 'w') as f:
-            json.dump({'count': count}, f)
-    except Exception:
-        pass
 
 class ShareManager:
     def __init__(self):
@@ -159,7 +141,7 @@ class ShareManager:
                         
                         # Format timestamp and progress
                         timestamp = datetime.now().strftime("%H:%M:%S")
-                        console.print(f"[cyan][{timestamp}][/cyan][green] Share Completed [yellow]{config['post_id']} [red]{config['total_shares']}/{config['target_shares']}")
+                        console.print(f"[cyan][{timestamp}][/cyan][green] Share Completed {config['post_id']} [red]{config['total_shares']}/{config['target_shares']}")
                     else:
                         return
             except Exception:
@@ -168,62 +150,21 @@ class ShareManager:
 async def main():
     banner()
     
-    # Load existing tokens
+    # Load tokens silently
     config['tokens'] = load_tokens()
-    print(Panel(f"[bold white]Loaded [bold green]{len(config['tokens'])}[bold white] tokens", 
-        title="[bold bright_white]>> [Information] <<",
-        width=65,
-        style="bold bright_white"
-    ))
     
-    # Get new token if needed
-    print(Panel(f"[bold white]Enter new token, make sure you have logged in with the correct account!", 
-        width=65, style="bold bright_white", title="[bold bright_white]>> [Token] <<", subtitle="╭─────", subtitle_align="left"))
-    new_token = console.input("[bold bright_white]   ╰─> ")
-    
-    if new_token:
-        save_token(new_token)
-        config['tokens'].append(new_token)
-        print(Panel(f"[bold green]Token successfully saved to system!", 
-            width=65, style="bold bright_white", title="[bold bright_white]>> [Success] <<"))
-    
-    if not config['tokens']:
-        print(Panel(f"[bold red]No tokens available! Please add a token first.", 
-            width=65, style="bold bright_white", title="[bold bright_white]>> [Error] <<"))
-        return
-        
-    print(Panel(f"[bold white]Enter Post ID, make sure your[bold red] post is public[bold white] and has a[bold red] Follow[bold white] button!", 
+    print(Panel(f"[bold white]Enter Post ID, make sure your[bold red] post is public!", 
         width=65, style="bold bright_white", title="[bold bright_white]>> [Post ID] <<", subtitle="╭─────", subtitle_align="left"))
     config['post_id'] = console.input("[bold bright_white]   ╰─> ")
     
-    print(Panel(f"[bold white]Enter shares per token[bold green] (Example: 100 shares per token)[bold white]", 
+    print(Panel(f"[bold white]Enter shares example 100", 
         width=65, style="bold bright_white", title="[bold bright_white]>> [Share Count] <<", subtitle="╭─────", subtitle_align="left"))
-
-    print(Panel("[white]Enter shares per token", 
-        title="[bright_white]>> [Share Count] <<",
-        width=65,
-        style="bold bright_white",
-        subtitle="╭─────",
-        subtitle_align="left"
-    ))
-    share_count = int(console.input("[bright_white]   ╰─> "))
+    share_count = int(console.input("[bold bright_white]   ╰─> "))
     
     config['target_shares'] = share_count * len(config['tokens'])
     
-    if not config['post_id'] or not share_count:
-        print(Panel("[red]Invalid input!", 
-            title="[bright_white]>> [Error] <<",
-            width=65,
-            style="bold bright_white"
-        ))
-        return
-    
-    print(Panel(
-        f"[white]Starting share process...\nTarget: [green]{config['target_shares']}[white] shares", 
-        title="[bright_white]>> [Process Started] <<",
-        width=65,
-        style="bold bright_white"
-    ))
+    os.system("clear")
+    banner()
     
     share_manager = ShareManager()
     
@@ -236,7 +177,7 @@ async def main():
     
     print(Panel(
         f"[green]Process completed!\n[white]Total shares: [green]{share_manager.global_share_count}", 
-        title="[bright_white]>> [Completed] <<",
+        title="[bold bright_white]>> [Completed] <<",
         width=65,
         style="bold bright_white"
     ))
@@ -246,22 +187,22 @@ if __name__ == "__main__":
         asyncio.run(main())
     except KeyboardInterrupt:
         print(Panel("[white]Script terminated by user", 
-            title="[bright_white]>> [Terminated] <<",
+            title="[bold bright_white]>> [Terminated] <<",
             width=65,
             style="bold bright_white"
         ))
     except Exception as e:
         print(Panel(f"[red]{str(e)}", 
-            title="[bright_white]>> [Error] <<",
+            title="[bold bright_white]>> [Error] <<",
             width=65,
             style="bold bright_white"
         ))
     
     print(Panel("[white]Press Enter to exit...", 
-        title="[bright_white]>> [Exit] <<",
+        title="[bold bright_white]>> [Exit] <<",
         width=65,
         style="bold bright_white",
         subtitle="╭─────",
         subtitle_align="left"
     ))
-    console.input("[bright_white]   ╰─> ")
+    console.input("[bold bright_white]   ╰─> ")
