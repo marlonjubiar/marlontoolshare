@@ -192,11 +192,11 @@ async def main():
             width=65, style="bold bright_white", title="[bold bright_white]>> [Error] <<"))
         return
         
-    print(Panel(f"[bold white]Enter Post ID, make sure the post has a[bold red] Follow[bold white] button!", 
+    print(Panel(f"[bold white]Enter Post ID, make sure your[bold red] post is public[bold white] and has a[bold red] Follow[bold white] button!", 
         width=65, style="bold bright_white", title="[bold bright_white]>> [Post ID] <<", subtitle="╭─────", subtitle_align="left"))
     config['post_id'] = console.input("[bold bright_white]   ╰─> ")
     
-    print(Panel(f"[bold white]Enter number of shares (recommended above[bold red] 5[bold white])", 
+    print(Panel(f"[bold white]Enter shares per token[bold green] (Example: 100 shares per token)[bold white]", 
         width=65, style="bold bright_white", title="[bold bright_white]>> [Share Count] <<", subtitle="╭─────", subtitle_align="left"))
 
     print(Panel("[white]Enter shares per token", 
