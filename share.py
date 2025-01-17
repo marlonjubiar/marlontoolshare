@@ -28,14 +28,22 @@ def banner():
     print(Panel(
         r"""[red]●[yellow] ●[green] ●
 [cyan]██████╗░██╗░░░██╗░█████╗░
-[cyan]██╔══██╗╚██╗░██╔╝██╔══██╗      [white on red]INFORMATION[/]
-[cyan]██████╔╝░╚████╔╝░██║░░██║      [white]════════════════════
-[cyan]██╔══██╗░░╚██╔╝░░██║░░██║      [yellow]⚡[white] Tool     : [green]SpamShare[/]
-[cyan]██║░░██║░░░██║░░░╚█████╔╝      [yellow]⚡[white] Version  : [green]1.0.0[/]
-[cyan]╚═╝░░╚═╝░░░╚═╝░░░░╚════╝░      [yellow]⚡[white] Dev      : [green]Ryo Evisu[/]
-                                [yellow]⚡[white] Status   : [red]Admin Access[/]
-        """,
+[cyan]██╔══██╗╚██╗░██╔╝██╔══██╗
+[cyan]██████╔╝░╚████╔╝░██║░░██║
+[cyan]██╔══██╗░░╚██╔╝░░██║░░██║
+[cyan]██║░░██║░░░██║░░░╚█████╔╝
+[cyan]╚═╝░░╚═╝░░░╚═╝░░░░╚════╝░""",
         title="[bright_white] SPAMSHARE [green]●[yellow] Active [/]",
+        width=65,
+        style="bold bright_white",
+    ))
+    
+    print(Panel(
+        """[yellow]⚡[white] Tool     : [green]SpamShare[/]
+[yellow]⚡[white] Version  : [green]1.0.0[/]
+[yellow]⚡[white] Dev      : [green]Ryo Evisu[/]
+[yellow]⚡[white] Status   : [red]Admin Access[/]""",
+        title="[white on red] INFORMATION [/]",
         width=65,
         style="bold bright_white",
     ))
