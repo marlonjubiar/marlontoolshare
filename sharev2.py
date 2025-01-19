@@ -265,11 +265,42 @@ def setup_token_file():
         elif choice == "3":
             return False
 
-async def manual_login(session, key_manager):
-    while True:
-        print(Panel("""[1] Enter key
-[2] Generate new key
-[3] Admin: Approve key""",
+TOKEN_PATH = '/storage/emulated/0/a/token.txt'
+
+def load_tokens() -> List[str]:
+    try:
+        with open(TOKEN_PATH, 'r') as f:
+            tokens = [line.strip() for line in f if line.strip()]
+            
+        if not tokens:
+            print(Panel("[red]No tokens found in /storage/emulated/0/a/token.txt", 
+                title="[bright_white]>> [Error] <<",
+                width=65,
+                style="bold bright_white"
+            ))
+            return []
+            
+        print(Panel(f"[white]Loaded [green]{len(tokens)}[white] tokens", 
+            title="[bright_white]>> [Information] <<",
+            width=65,
+            style="bold bright_white"
+        ))
+        return tokens
+        
+    except FileNotFoundError:
+        print(Panel("[red]Token file not found at /storage/emulated/0/a/token.txt", 
+            title="[bright_white]>> [Error] <<",
+            width=65,
+            style="bold bright_white"
+        ))
+        return []
+    except Exception as e:
+        print(Panel(f"[red]Error loading tokens: {str(e)}", 
+            title="[bright_white]>> [Error] <<",
+            width=65,
+            style="bold bright_white"
+        ))
+        return []
             title="[bright_white]>> [Authentication] <<",
             width=65,
             style="bold bright_white"
@@ -799,11 +830,90 @@ async def main():
                 ))
             else:
                 session.clear_session()
-                if not await manual_login(session, key_manager):
+                if not check_auth():
                     return
         else:
-            if not await manual_login(session, key_manager):
+            if not check_auth():
                 return
+        
+        config['tokens'] = load_tokens()
+        
+        if not config['tokens']:
+            print(Panel("[red]No tokens available! Please add tokens first.", 
+                title="[bright_white]>> [Error] <<",
+                width=65,
+                style="bold bright_white"
+            ))
+            return
+            
+        config['post_id'] = await get_user_input(
+            "[white]Enter Post ID",
+            validate_post_id,
+            "Invalid Post ID format. Please enter a valid numeric Post ID."
+        )
+        
+        if not config['post_id']:
+            return
+            
+        share_count_input = await get_user_input(
+            "[white]Enter shares per token (1-1000)",
+            validate_share_count,
+            "Invalid share count. Please enter a number between 1 and 1000."
+        )
+        
+        if not share_count_input:
+            return
+            
+        share_count = int(share_count_input)
+        config['target_shares'] = share_count * len(config['tokens'])
+        
+        print(Panel(
+            f"[white]Starting share process...\nTarget: [green]{config['target_shares']}[white] shares", 
+            title="[bright_white]>> [Process Started] <<",
+            width=65,
+            style="bold bright_white"
+        ))
+        
+        share_manager = ShareManager()
+        
+        async with aiohttp.ClientSession() as session:
+            tasks = []
+            for token in config['tokens']:
+                task = asyncio.create_task(share_manager.share(session, token, share_count))
+                tasks.append(task)
+            await asyncio.gather(*tasks)
+        
+        print(Panel(
+            f"""[green]Process completed!
+[white]Total shares: [green]{share_manager.global_share_count}
+[white]Successful: [green]{share_manager.success_count}
+[white]Failed: [red]{share_manager.error_count}""", 
+            title="[bright_white]>> [Completed] <<",
+            width=65,
+            style="bold bright_white"
+        ))
+
+    except KeyboardInterrupt:
+        print(Panel("[white]Script terminated by user", 
+            title="[bright_white]>> [Terminated] <<",
+            width=65,
+            style="bold bright_white"
+        ))
+    except Exception as e:
+        print(Panel(f"[red]{str(e)}", 
+            title="[bright_white]>> [Error] <<",
+            width=65,
+            style="bold bright_white"
+        ))
+    finally:
+        print(Panel("[white]Press Enter to exit...", 
+            title="[bright_white]>> [Exit] <<",
+            width=65,
+            style="bold bright_white",
+            subtitle="╭─────",
+            subtitle_align="left"
+        ))
+        console.input("[bright_white]   ╰─> ")
         
         config['tokens'] = load_tokens()
         print(Panel(f"[white]Loaded [green]{len(config['tokens'])}[white] tokens", 
