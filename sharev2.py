@@ -20,7 +20,7 @@ console = Console()
 os.system('clear')
 
 # File paths
-TOKEN_PATH = '/storage/emulated/0/a/token.txt'
+TOKEN_PATH = 'token.txt'  # Changed to local path for Termux compatibility
 GLOBAL_SHARE_COUNT_FILE = 'global_share_count.json'
 KEYS_FILE = 'auth_keys.json'
 
@@ -275,12 +275,16 @@ def check_auth() -> bool:
             return False
             
         key_info = key_manager.get_key_info(key)
-        print(Panel(f"""[green]Authentication successful!
-[white]Key Status: [green]{key_info['status']}
-[white]Created  : [cyan]{key_info['created_at']}
-[white]Expires  : [cyan]{key_info['expiry']}
-[white]Remaining: [yellow]{key_info['remaining']}""", 
-            title="[bright_white]>> [Key Information] <<",
+        print(Panel(f"""[yellow]⚡[cyan] Status   : [green]{key_info['status']}[/]
+[yellow]⚡[cyan] Created  : [cyan]{key_info['created_at']}[/]
+[yellow]⚡[cyan] Expires  : [cyan]{key_info['expiry']}[/]
+[yellow]⚡[cyan] Remaining: [yellow]{key_info['remaining']}[/]""",
+            title="[white on red] KEY INFORMATION [/]",
+            width=65,
+            style="bold bright_white"
+        ))
+        print(Panel("[green]Authentication successful!", 
+            title="[bright_white]>> [Success] <<",
             width=65,
             style="bold bright_white"
         ))
@@ -288,10 +292,11 @@ def check_auth() -> bool:
         
     elif choice == "2":
         key = key_manager.generate_key()
-        print(Panel(f"""[white]Your key: [green]{key}
-[yellow]Note: Key requires admin approval before use
-[white]Price: [green]P50 for 3 days access""",
-            title="[bright_white]>> [New Key Generated] <<",
+        print(Panel(f"""[yellow]⚡[cyan] Key      : [green]{key}[/]
+[yellow]⚡[cyan] Status   : [yellow]Pending Approval[/]
+[yellow]⚡[cyan] Price    : [green]P50[/]
+[yellow]⚡[cyan] Duration : [green]3 Days[/]""",
+            title="[white on red] KEY INFORMATION [/]",
             width=65,
             style="bold bright_white"
         ))
@@ -318,8 +323,8 @@ def check_auth() -> bool:
         # Show list of pending keys
         pending_keys = [k for k, v in key_manager.keys.items() if not v['active']]
         if not pending_keys:
-            print(Panel("[yellow]No pending keys found", 
-                title="[bright_white]>> [Information] <<",
+            print(Panel("[yellow]⚡[cyan] Status : [yellow]No pending keys found[/]", 
+                title="[white on red] PENDING KEYS [/]",
                 width=65,
                 style="bold bright_white"
             ))
@@ -327,8 +332,8 @@ def check_auth() -> bool:
             
         # Display keys with numbers for easier selection
         print(Panel("\n".join(
-            f"[yellow]{i}.[white] {key}" for i, key in enumerate(pending_keys, 1)
-        ), title="[bright_white]>> [Pending Keys] <<",
+            f"[yellow]⚡[cyan] Key {i}   : [white]{key}[/]" for i, key in enumerate(pending_keys, 1)
+        ), title="[white on red] PENDING KEYS [/]",
             width=65,
             style="bold bright_white"
         ))
