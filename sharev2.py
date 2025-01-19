@@ -90,21 +90,6 @@ class KeyManager:
             'is_expired': now > expiry
         }
 
-    def list_keys(self) -> List[Dict]:
-        now = datetime.now(self.ph_tz)
-        keys_info = []
-        for key, data in self.keys.items():
-            expiry = datetime.strptime(data['expiry'], '%Y-%m-%d %H:%M:%S')
-            expiry = self.ph_tz.localize(expiry)
-            
-            if now <= expiry:  # Only show non-expired keys
-                keys_info.append({
-                    'key': key,
-                    'status': "Active" if data['active'] else "Pending",
-                    'expiry': data['expiry']
-                })
-        return keys_info
-
     def approve_key(self, key: str) -> bool:
         if key in self.keys:
             self.keys[key]['active'] = True
@@ -165,7 +150,6 @@ def get_system_info() -> Dict[str, str]:
         }
 
 def banner():
-    os.system('clear')
     sys_info = get_system_info()
     
     print(Panel(
@@ -242,136 +226,217 @@ def save_global_share_count(count: int):
             style="bold bright_white"
         ))
 
-def check_auth() -> bool:
-    key_manager = KeyManager()
+async def get_user_input(prompt: str, validator_func, error_message: str) -> Optional[str]:
+    while True:
+        os.system('clear')
+        banner()
+        
+        print(Panel(prompt, 
+            title="[bright_white]>> [Input Required] <<",
+            width=65,
+            style="bold bright_white",
+            subtitle="╭─────",
+            subtitle_align="left"
+        ))
+        user_input = console.input("[bright_white]   ╰─> ")
+        
+        if user_input.lower() == 'exit':
+            return None
+            
+        if validator_func(user_input):
+            return user_input
+            
+        print(Panel(f"[red]{error_message}", 
+            title="[bright_white]>> [Error] <<",
+            width=65,
+            style="bold bright_white"
+        ))
+        input("\nPress Enter to try again...")
+
+def show_menu():
+    os.system('clear')
+    banner()
     
     print(Panel("""[1] Enter key
 [2] Generate new key
 [3] Admin: Approve key""",
         title="[bright_white]>> [Authentication] <<",
         width=65,
-        style="bold bright_white"
+        style="bold bright_white",
+        subtitle="╭─────",
+        subtitle_align="left"
     ))
-    
-    choice = console.input("[bright_white]Enter choice (1-3): ")
-    
-    if choice == "1":
-        print(Panel("[white]Enter Your Key", 
-            title="[bright_white]>> [Key Authentication] <<",
-            width=65,
-            style="bold bright_white",
-            subtitle="╭─────",
-            subtitle_align="left"
-        ))
-        key = console.input("[bright_white]   ╰─> ")
-        is_valid, message = key_manager.validate_key(key)
-        
-        if not is_valid:
-            print(Panel(f"[red]{message}", 
-                title="[bright_white]>> [Error] <<",
-                width=65,
-                style="bold bright_white"
-            ))
-            return False
-            
-        key_info = key_manager.get_key_info(key)
-        print(Panel(f"""[green]Authentication successful!
-[white]Key Status: [green]{key_info['status']}
-[white]Created  : [cyan]{key_info['created_at']}
-[white]Expires  : [cyan]{key_info['expiry']}
-[white]Remaining: [yellow]{key_info['remaining']}""", 
-            title="[bright_white]>> [Key Information] <<",
-            width=65,
-            style="bold bright_white"
-        ))
-        return True
-        
-    elif choice == "2":
-        key = key_manager.generate_key()
-        print(Panel(f"""[white]Your key: [green]{key}
-[yellow]Note: Key requires admin approval before use
-[white]Price: [green]P50 for 3 days access""",
-            title="[bright_white]>> [New Key Generated] <<",
-            width=65,
-            style="bold bright_white"
-        ))
-        return False
-        
-    elif choice == "3":
-        print(Panel("[white]Enter Admin Password", 
-            title="[bright_white]>> [Admin Authentication] <<",
-            width=65,
-            style="bold bright_white",
-            subtitle="╭─────",
-            subtitle_align="left"
-        ))
-        admin_pass = console.input("[bright_white]   ╰─> ")
-        
-        if hashlib.sha256(admin_pass.encode()).hexdigest() != ADMIN_HASH:
-            print(Panel("[red]Invalid admin password", 
-                title="[bright_white]>> [Error] <<",
-                width=65,
-                style="bold bright_white"
-            ))
-            return False
+    return console.input("[bright_white]   ╰─> ")
 
-        # Show list of pending keys
-        pending_keys = [k for k, v in key_manager.keys.items() if not v['active']]
-        if not pending_keys:
-            print(Panel("[yellow]No pending keys found", 
-                title="[bright_white]>> [Information] <<",
+def check_auth() -> bool:
+    key_manager = KeyManager()
+    
+    while True:
+        choice = show_menu()
+        
+        if choice == "1":
+            os.system('clear')
+            banner()
+            print(Panel("[white]Enter Your Key", 
+                title="[bright_white]>> [Key Authentication] <<",
                 width=65,
-                style="bold bright_white"
+                style="bold bright_white",
+                subtitle="╭─────",
+                subtitle_align="left"
             ))
-            return False
+            key = console.input("[bright_white]   ╰─> ")
+            is_valid, message = key_manager.validate_key(key)
             
-        # Display keys with numbers for easier selection
-        print(Panel("\n".join(
-            f"[yellow]{i}.[white] {key}" for i, key in enumerate(pending_keys, 1)
-        ), title="[bright_white]>> [Pending Keys] <<",
-            width=65,
-            style="bold bright_white"
-        ))
-        
-        print(Panel("[white]Enter Key Number to Approve (1, 2, 3, etc.)", 
-            title="[bright_white]>> [Key Approval] <<",
-            width=65,
-            style="bold bright_white",
-            subtitle="╭─────",
-            subtitle_align="left"
-        ))
-        key_num = console.input("[bright_white]   ╰─> ")
-        
-        try:
-            key_index = int(key_num) - 1
-            if 0 <= key_index < len(pending_keys):
-                key_to_approve = pending_keys[key_index]
-                if key_manager.approve_key(key_to_approve):
-                    print(Panel("[green]Key approved successfully!", 
-                        title="[bright_white]>> [Success] <<",
-                        width=65,
-                        style="bold bright_white"
-                    ))
-                else:
-                    print(Panel("[red]Error approving key", 
-                        title="[bright_white]>> [Error] <<",
-                        width=65,
-                        style="bold bright_white"
-                    ))
-            else:
-                print(Panel("[red]Invalid key number", 
+            if not is_valid:
+                print(Panel(f"[red]{message}", 
                     title="[bright_white]>> [Error] <<",
                     width=65,
                     style="bold bright_white"
                 ))
-        except ValueError:
-            print(Panel("[red]Please enter a valid number", 
-                title="[bright_white]>> [Error] <<",
+                input("\nPress Enter to try again...")
+                continue
+                
+            key_info = key_manager.get_key_info(key)
+            os.system('clear')
+            banner()
+            
+            print(Panel(
+                f"""[white]╔═══════════════════════════════════════════╗
+[white]║ [green]           Key Information            [white]║
+[white]╠═══════════════════════════════════════════╣
+[white]║ Status   : [green]{key_info['status']:<27}[white]║
+[white]║ Created  : [cyan]{key_info['created_at']:<27}[white]║
+[white]║ Expires  : [cyan]{key_info['expiry']:<27}[white]║
+[white]║ Remaining: [yellow]{key_info['remaining']:<27}[white]║
+[white]╚═══════════════════════════════════════════╝""",
+                title="[bright_white]>> [Authentication Successful] <<",
+                width=65,
+                style="bold bright_white"
+            ))
+            input("\nPress Enter to continue...")
+            return True
+            
+        elif choice == "2":
+            os.system('clear')
+            banner()
+            key = key_manager.generate_key()
+            print(Panel(
+                f"""[white]╔═══════════════════════════════════════════╗
+[white]║ [green]           New Key Generated          [white]║
+[white]╠═══════════════════════════════════════════╣
+[white]║ Key     : [green]{key}[white]║
+[white]║ Price   : [yellow]P50 for 3 days access[white]         ║
+[white]║ Status  : [red]Requires admin approval[white]        ║
+[white]╚═══════════════════════════════════════════╝""",
+                title="[bright_white]>> [Key Generated] <<",
+                width=65,
+                style="bold bright_white"
+            ))
+            input("\nPress Enter to continue...")
+            continue
+            
+        elif choice == "3":
+            os.system('clear')
+            banner()
+            print(Panel("[white]Enter Admin Password", 
+                title="[bright_white]>> [Admin Authentication] <<",
+                width=65,
+                style="bold bright_white",
+                subtitle="╭─────",
+                subtitle_align="left"
+            ))
+            admin_pass = console.input("[bright_white]   ╰─> ")
+            
+            if hashlib.sha256(admin_pass.encode()).hexdigest() != ADMIN_HASH:
+                print(Panel("[red]Invalid admin password", 
+                    title="[bright_white]>> [Error] <<",
+                    width=65,
+                    style="bold bright_white"
+                ))
+                input("\nPress Enter to try again...")
+                continue
+
+            pending_keys = [k for k, v in key_manager.keys.items() if not v['active']]
+            if not pending_keys:
+                print(Panel("[yellow]No pending keys found", 
+                    title="[bright_white]>> [Information] <<",
+                    width=65,
+                    style="bold bright_white"
+                ))
+                input("\nPress Enter to continue...")
+                continue
+                
+            os.system('clear')
+            banner()
+            # Format pending keys in a fancy panel
+            key_list = [
+                "[white]╔═══════════════════════════════════════════╗",
+                "[white]║ [yellow]           Pending Keys               [white]║",
+                "[white]╠═══════════════════════════════════════════╣"
+            ]
+            for i, key in enumerate(pending_keys, 1):
+                key_list.append(f"[white]║ [yellow]{i}.[white] {key:<35}[white]║")
+            key_list.append("[white]╚═══════════════════════════════════════════╝")
+            
+            print(Panel("\n".join(key_list),
+                title="[bright_white]>> [Pending Keys] <<",
                 width=65,
                 style="bold bright_white"
             ))
             
-        return False
+            print(Panel("[white]Enter Key Number to Approve", 
+                title="[bright_white]>> [Key Approval] <<",
+                width=65,
+                style="bold bright_white",
+                subtitle="╭─────",
+                subtitle_align="left"
+            ))
+            key_num = console.input("[bright_white]   ╰─> ")
+            
+            try:
+                key_index = int(key_num) - 1
+                if 0 <= key_index < len(pending_keys):
+                    key_to_approve = pending_keys[key_index]
+                    if key_manager.approve_key(key_to_approve):
+                        print(Panel(
+                            f"""[white]╔═══════════════════════════════════════════╗
+[white]║ [green]         Key Approved Successfully      [white]║
+[white]╠═══════════════════════════════════════════╣
+[white]║ Key: [green]{key_to_approve}[white]║
+[white]╚═══════════════════════════════════════════╝""",
+                            title="[bright_white]>> [Success] <<",
+                            width=65,
+                            style="bold bright_white"
+                        ))
+                    else:
+                        print(Panel("[red]Error approving key", 
+                            title="[bright_white]>> [Error] <<",
+                            width=65,
+                            style="bold bright_white"
+                        ))
+                else:
+                    print(Panel("[red]Invalid key number", 
+                        title="[bright_white]>> [Error] <<",
+                        width=65,
+                        style="bold bright_white"
+                    ))
+            except ValueError:
+                print(Panel("[red]Please enter a valid number", 
+                    title="[bright_white]>> [Error] <<",
+                    width=65,
+                    style="bold bright_white"
+                ))
+            input("\nPress Enter to continue...")
+            continue
+            
+        else:
+            print(Panel("[red]Invalid choice. Please enter 1, 2, or 3", 
+                title="[bright_white]>> [Error] <<",
+                width=65,
+                style="bold bright_white"
+            ))
+            input("\nPress Enter to try again...")
+            continue
     
     return False
 
@@ -417,62 +482,68 @@ class ShareManager:
                         save_global_share_count(self.global_share_count)
                         
                         timestamp = datetime.now().strftime("%H:%M:%S")
-                        console.print(f"[cyan][{timestamp}][/cyan][green] Share Completed [yellow]{config['post_id']} [red]{config['total_shares']}/{config['target_shares']}")
+                        os.system('clear')
+                        banner()
+                        console.print(Panel(
+                            f"""[white]╔═══════════════════════════════════════════╗
+[white]║ [green]           Share Completed            [white]║
+[white]╠═══════════════════════════════════════════╣
+[white]║ Post ID  : [yellow]{config['post_id']:<27}[white]║
+[white]║ Progress : [cyan]{config['total_shares']}/{config['target_shares']:<23}[white]║
+[white]║ Time     : [green]{timestamp:<27}[white]║
+[white]╚═══════════════════════════════════════════╝""",
+                            title="[bright_white]>> [Share Status] <<",
+                            width=65,
+                            style="bold bright_white"
+                        ))
                     else:
                         self.error_count += 1
                         retries -= 1
                         if 'error' in data:
-                            console.print(f"[red]Error: {data['error'].get('message', 'Unknown error')}")
+                            print(Panel(f"[red]{data['error'].get('message', 'Unknown error')}", 
+                                title="[bright_white]>> [Error] <<",
+                                width=65,
+                                style="bold bright_white"
+                            ))
             except Exception as e:
                 self.error_count += 1
                 retries -= 1
-                console.print(f"[red]Share failed: {str(e)}")
+                print(Panel(f"[red]Share failed: {str(e)}", 
+                    title="[bright_white]>> [Error] <<",
+                    width=65,
+                    style="bold bright_white"
+                ))
                 await asyncio.sleep(1)
-
-async def get_user_input(prompt: str, validator_func, error_message: str) -> Optional[str]:
-    while True:
-        print(Panel(prompt, 
-            title="[bright_white]>> [Input] <<",
-            width=65,
-            style="bold bright_white",
-            subtitle="╭─────",
-            subtitle_align="left"
-        ))
-        user_input = console.input("[bright_white]   ╰─> ")
-        
-        if user_input.lower() == 'exit':
-            return None
-            
-        if validator_func(user_input):
-            return user_input
-        else:
-            print(Panel(f"[red]{error_message}", 
-                title="[bright_white]>> [Error] <<",
-                width=65,
-                style="bold bright_white"
-            ))
 
 async def main():
     try:
         banner()
         
-        # Add authentication check
         if not check_auth():
             return
         
         config['tokens'] = load_tokens()
-        print(Panel(f"[white]Loaded [green]{len(config['tokens'])}[white] tokens", 
+        print(Panel(f"""[white]╔═══════════════════════════════════════════╗
+[white]║ [green]           Tokens Loaded             [white]║
+[white]╠═══════════════════════════════════════════╣
+[white]║ Count    : [green]{len(config['tokens']):<27}[white]║
+[white]╚═══════════════════════════════════════════╝""", 
             title="[bright_white]>> [Information] <<",
             width=65,
             style="bold bright_white"
         ))
         
         if not config['tokens']:
-            print(Panel("[red]No tokens available! Please add tokens to the token file first.", 
+            print(Panel("""[white]╔═══════════════════════════════════════════╗
+[white]║ [red]              Error                   [white]║
+[white]╠═══════════════════════════════════════════╣
+[white]║ [red]No tokens available in token file!    [white]║
+[white]╚═══════════════════════════════════════════╝""", 
                 title="[bright_white]>> [Error] <<",
                 width=65,
                 style="bold bright_white"
             ))
+            input("\nPress Enter to exit...")
             return
             
         config['post_id'] = await get_user_input(
@@ -497,11 +568,18 @@ async def main():
         config['target_shares'] = share_count * len(config['tokens'])
         
         print(Panel(
-            f"[white]Starting share process...\nTarget: [green]{config['target_shares']}[white] shares", 
+            f"""[white]╔═══════════════════════════════════════════╗
+[white]║ [green]         Starting Share Process        [white]║
+[white]╠═══════════════════════════════════════════╣
+[white]║ Target   : [green]{config['target_shares']:<27}[white]║
+[white]║ Post ID  : [yellow]{config['post_id']:<27}[white]║
+[white]╚═══════════════════════════════════════════╝""", 
             title="[bright_white]>> [Process Started] <<",
             width=65,
             style="bold bright_white"
         ))
+        
+        input("\nPress Enter to start sharing...")
         
         share_manager = ShareManager()
         
@@ -513,23 +591,34 @@ async def main():
             await asyncio.gather(*tasks)
         
         print(Panel(
-            f"""[green]Process completed!
-[white]Total shares: [green]{share_manager.global_share_count}
-[white]Successful: [green]{share_manager.success_count}
-[white]Failed: [red]{share_manager.error_count}""", 
+            f"""[white]╔═══════════════════════════════════════════╗
+[white]║ [green]         Process Completed            [white]║
+[white]╠═══════════════════════════════════════════╣
+[white]║ Total    : [green]{share_manager.global_share_count:<27}[white]║
+[white]║ Success  : [green]{share_manager.success_count:<27}[white]║
+[white]║ Failed   : [red]{share_manager.error_count:<27}[white]║
+[white]╚═══════════════════════════════════════════╝""", 
             title="[bright_white]>> [Completed] <<",
             width=65,
             style="bold bright_white"
         ))
 
     except KeyboardInterrupt:
-        print(Panel("[white]Script terminated by user", 
+        print(Panel("""[white]╔═══════════════════════════════════════════╗
+[white]║ [yellow]         Process Terminated           [white]║
+[white]╠═══════════════════════════════════════════╣
+[white]║ [yellow]Script terminated by user            [white]║
+[white]╚═══════════════════════════════════════════╝""", 
             title="[bright_white]>> [Terminated] <<",
             width=65,
             style="bold bright_white"
         ))
     except Exception as e:
-        print(Panel(f"[red]{str(e)}", 
+        print(Panel(f"""[white]╔═══════════════════════════════════════════╗
+[white]║ [red]              Error                   [white]║
+[white]╠═══════════════════════════════════════════╣
+[white]║ [red]{str(e):<35}[white]║
+[white]╚═══════════════════════════════════════════╝""", 
             title="[bright_white]>> [Error] <<",
             width=65,
             style="bold bright_white"
