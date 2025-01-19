@@ -202,12 +202,79 @@ def banner():
         style="bold bright_white",
     ))
 
+def setup_token_file():
+    print(Panel("[white]No token file found. Let's set it up!", 
+        title="[bright_white]>> [Setup] <<",
+        width=65,
+        style="bold bright_white"
+    ))
+    
+    tokens = []
+    while True:
+        print(Panel(f"""[yellow]⚡[cyan] Current Tokens : [green]{len(tokens)}[/]
+[yellow]⚡[cyan] Options       :
+   [1] Add token
+   [2] Save and continue
+   [3] Exit""",
+            title="[white on red] TOKEN SETUP [/]",
+            width=65,
+            style="bold bright_white"
+        ))
+        
+        choice = console.input("[bright_white]Enter choice (1-3): ")
+        
+        if choice == "1":
+            print(Panel("[white]Enter Facebook Token", 
+                title="[bright_white]>> [Input] <<",
+                width=65,
+                style="bold bright_white",
+                subtitle="╭─────",
+                subtitle_align="left"
+            ))
+            token = console.input("[bright_white]   ╰─> ")
+            if token.strip():
+                tokens.append(token.strip())
+                print(Panel(f"[green]Token added successfully! Total tokens: {len(tokens)}", 
+                    title="[bright_white]>> [Success] <<",
+                    width=65,
+                    style="bold bright_white"
+                ))
+        elif choice == "2":
+            if tokens:
+                try:
+                    with open('token.txt', 'w') as f:
+                        f.write('\n'.join(tokens))
+                    print(Panel(f"[green]Successfully saved {len(tokens)} tokens to token.txt", 
+                        title="[bright_white]>> [Success] <<",
+                        width=65,
+                        style="bold bright_white"
+                    ))
+                    return True
+                except Exception as e:
+                    print(Panel(f"[red]Error saving tokens: {str(e)}", 
+                        title="[bright_white]>> [Error] <<",
+                        width=65,
+                        style="bold bright_white"
+                    ))
+            else:
+                print(Panel("[red]No tokens to save!", 
+                    title="[bright_white]>> [Error] <<",
+                    width=65,
+                    style="bold bright_white"
+                ))
+        elif choice == "3":
+            return False
+
 def load_tokens() -> List[str]:
     try:
-        if os.path.exists(TOKEN_PATH):
-            with open(TOKEN_PATH, 'r') as f:
-                return [line.strip() for line in f if line.strip()]
-        return []
+        if not os.path.exists('token.txt'):
+            if setup_token_file():
+                with open('token.txt', 'r') as f:
+                    return [line.strip() for line in f if line.strip()]
+            return []
+            
+        with open('token.txt', 'r') as f:
+            return [line.strip() for line in f if line.strip()]
     except Exception as e:
         console.print(Panel(f"[red]Error loading tokens: {str(e)}", 
             title="[bright_white]>> [Error] <<",
