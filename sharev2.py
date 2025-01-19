@@ -267,51 +267,39 @@ def setup_token_file():
 
 def load_tokens() -> List[str]:
     try:
-        print(Panel("[white]Enter Token File Path", 
-            title="[bright_white]>> [Input] <<",
-            width=65,
-            style="bold bright_white",
-            subtitle="╭─────",
-            subtitle_align="left"
-        ))
-        file_path = console.input("[bright_white]   ╰─> ")
-        
-        if not file_path.strip():
-            print(Panel("[red]No file path provided!", 
-                title="[bright_white]>> [Error] <<",
-                width=65,
-                style="bold bright_white"
-            ))
+        if not os.path.exists('token.txt'):
+            if setup_token_file():
+                with open('token.txt', 'r') as f:
+                    tokens = [line.strip() for line in f if line.strip()]
+                print(Panel(f"[green]Successfully loaded {len(tokens)} tokens", 
+                    title="[bright_white]>> [Success] <<",
+                    width=65,
+                    style="bold bright_white"
+                ))
+                return tokens
             return []
             
-        with open(file_path, 'r') as f:
+        with open('token.txt', 'r') as f:
             tokens = [line.strip() for line in f if line.strip()]
-            
-        if not tokens:
-            print(Panel("[red]No tokens found in file!", 
-                title="[bright_white]>> [Error] <<",
-                width=65,
-                style="bold bright_white"
-            ))
-            return []
-            
-        # Save tokens to local token.txt for future use
-        with open('token.txt', 'w') as f:
-            f.write('\n'.join(tokens))
-            
         print(Panel(f"[white]Loaded [green]{len(tokens)}[white] tokens", 
             title="[bright_white]>> [Information] <<",
             width=65,
             style="bold bright_white"
         ))
+        if not tokens:
+            if setup_token_file():
+                with open('token.txt', 'r') as f:
+                    return [line.strip() for line in f if line.strip()]
         return tokens
-        
     except Exception as e:
-        print(Panel(f"[red]Error loading tokens: {str(e)}", 
+        console.print(Panel(f"[red]Error loading tokens: {str(e)}", 
             title="[bright_white]>> [Error] <<",
             width=65,
             style="bold bright_white"
         ))
+        if setup_token_file():
+            with open('token.txt', 'r') as f:
+                return [line.strip() for line in f if line.strip()]
         return []
             title="[bright_white]>> [Authentication] <<",
             width=65,
