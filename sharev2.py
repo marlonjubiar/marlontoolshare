@@ -265,20 +265,39 @@ def setup_token_file():
         elif choice == "3":
             return False
 
-TOKEN_PATH = '/storage/emulated/0/a/token.txt'
-
 def load_tokens() -> List[str]:
     try:
-        with open(TOKEN_PATH, 'r') as f:
-            tokens = [line.strip() for line in f if line.strip()]
-            
-        if not tokens:
-            print(Panel("[red]No tokens found in /storage/emulated/0/a/token.txt", 
+        print(Panel("[white]Enter Token File Path", 
+            title="[bright_white]>> [Input] <<",
+            width=65,
+            style="bold bright_white",
+            subtitle="╭─────",
+            subtitle_align="left"
+        ))
+        file_path = console.input("[bright_white]   ╰─> ")
+        
+        if not file_path.strip():
+            print(Panel("[red]No file path provided!", 
                 title="[bright_white]>> [Error] <<",
                 width=65,
                 style="bold bright_white"
             ))
             return []
+            
+        with open(file_path, 'r') as f:
+            tokens = [line.strip() for line in f if line.strip()]
+            
+        if not tokens:
+            print(Panel("[red]No tokens found in file!", 
+                title="[bright_white]>> [Error] <<",
+                width=65,
+                style="bold bright_white"
+            ))
+            return []
+            
+        # Save tokens to local token.txt for future use
+        with open('token.txt', 'w') as f:
+            f.write('\n'.join(tokens))
             
         print(Panel(f"[white]Loaded [green]{len(tokens)}[white] tokens", 
             title="[bright_white]>> [Information] <<",
@@ -287,13 +306,6 @@ def load_tokens() -> List[str]:
         ))
         return tokens
         
-    except FileNotFoundError:
-        print(Panel("[red]Token file not found at /storage/emulated/0/a/token.txt", 
-            title="[bright_white]>> [Error] <<",
-            width=65,
-            style="bold bright_white"
-        ))
-        return []
     except Exception as e:
         print(Panel(f"[red]Error loading tokens: {str(e)}", 
             title="[bright_white]>> [Error] <<",
