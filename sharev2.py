@@ -265,23 +265,136 @@ def setup_token_file():
         elif choice == "3":
             return False
 
-def load_tokens() -> List[str]:
-    try:
-        if not os.path.exists('token.txt'):
-            if setup_token_file():
-                with open('token.txt', 'r') as f:
-                    return [line.strip() for line in f if line.strip()]
-            return []
-            
-        with open('token.txt', 'r') as f:
-            return [line.strip() for line in f if line.strip()]
-    except Exception as e:
-        console.print(Panel(f"[red]Error loading tokens: {str(e)}", 
-            title="[bright_white]>> [Error] <<",
+async def manual_login(session, key_manager):
+    while True:
+        print(Panel("""[1] Enter key
+[2] Generate new key
+[3] Admin: Approve key""",
+            title="[bright_white]>> [Authentication] <<",
             width=65,
             style="bold bright_white"
         ))
-        return []
+        
+        choice = console.input("[bright_white]Enter choice (1-3): ")
+        
+        if choice == "1":
+            print(Panel("[white]Enter Your Key", 
+                title="[bright_white]>> [Key Authentication] <<",
+                width=65,
+                style="bold bright_white",
+                subtitle="╭─────",
+                subtitle_align="left"
+            ))
+            key = console.input("[bright_white]   ╰─> ")
+            is_valid, message = key_manager.validate_key(key)
+            
+            if not is_valid:
+                print(Panel(f"[red]{message}", 
+                    title="[bright_white]>> [Error] <<",
+                    width=65,
+                    style="bold bright_white"
+                ))
+                continue
+                
+            session.save_session(key)
+            key_info = key_manager.get_key_info(key)
+            print(Panel(f"""[yellow]⚡[cyan] Status   : [green]{key_info['status']}[/]
+[yellow]⚡[cyan] Created  : [cyan]{key_info['created_at']}[/]
+[yellow]⚡[cyan] Expires  : [cyan]{key_info['expiry']}[/]
+[yellow]⚡[cyan] Remaining: [yellow]{key_info['remaining']}[/]""",
+                title="[white on red] KEY INFORMATION [/]",
+                width=65,
+                style="bold bright_white"
+            ))
+            return True
+            
+        elif choice == "2":
+            key = key_manager.generate_key()
+            print(Panel(f"""[yellow]⚡[cyan] Key      : [green]{key}[/]
+[yellow]⚡[cyan] Status   : [yellow]Pending Approval[/]
+[yellow]⚡[cyan] Price    : [green]P50[/]
+[yellow]⚡[cyan] Duration : [green]3 Days[/]""",
+                title="[white on red] KEY INFORMATION [/]",
+                width=65,
+                style="bold bright_white"
+            ))
+            return False
+            
+        elif choice == "3":
+            print(Panel("[white]Enter Admin Password", 
+                title="[bright_white]>> [Admin Authentication] <<",
+                width=65,
+                style="bold bright_white",
+                subtitle="╭─────",
+                subtitle_align="left"
+            ))
+            admin_pass = console.input("[bright_white]   ╰─> ")
+            
+            if hashlib.sha256(admin_pass.encode()).hexdigest() != ADMIN_HASH:
+                print(Panel("[red]Invalid admin password", 
+                    title="[bright_white]>> [Error] <<",
+                    width=65,
+                    style="bold bright_white"
+                ))
+                return False
+
+            pending_keys = [k for k, v in key_manager.keys.items() if not v['active']]
+            if not pending_keys:
+                print(Panel("[yellow]⚡[cyan] Status : [yellow]No pending keys found[/]", 
+                    title="[white on red] PENDING KEYS [/]",
+                    width=65,
+                    style="bold bright_white"
+                ))
+                return False
+                
+            print(Panel("\n".join(
+                f"[yellow]⚡[cyan] Key {i}   : [white]{key}[/]" for i, key in enumerate(pending_keys, 1)
+            ), title="[white on red] PENDING KEYS [/]",
+                width=65,
+                style="bold bright_white"
+            ))
+            
+            print(Panel("[white]Enter Key Number to Approve (1, 2, 3, etc.)", 
+                title="[bright_white]>> [Key Approval] <<",
+                width=65,
+                style="bold bright_white",
+                subtitle="╭─────",
+                subtitle_align="left"
+            ))
+            key_num = console.input("[bright_white]   ╰─> ")
+            
+            try:
+                key_index = int(key_num) - 1
+                if 0 <= key_index < len(pending_keys):
+                    key_to_approve = pending_keys[key_index]
+                    if key_manager.approve_key(key_to_approve):
+                        print(Panel("[green]Key approved successfully!", 
+                            title="[bright_white]>> [Success] <<",
+                            width=65,
+                            style="bold bright_white"
+                        ))
+                    else:
+                        print(Panel("[red]Error approving key", 
+                            title="[bright_white]>> [Error] <<",
+                            width=65,
+                            style="bold bright_white"
+                        ))
+                else:
+                    print(Panel("[red]Invalid key number", 
+                        title="[bright_white]>> [Error] <<",
+                        width=65,
+                        style="bold bright_white"
+                    ))
+            except ValueError:
+                print(Panel("[red]Please enter a valid number", 
+                    title="[bright_white]>> [Error] <<",
+                    width=65,
+                    style="bold bright_white"
+                ))
+                
+            return False
+            
+    return False
 
 def load_global_share_count() -> int:
     try:
@@ -524,13 +637,173 @@ async def get_user_input(prompt: str, validator_func, error_message: str) -> Opt
                 style="bold bright_white"
             ))
 
+def setup_token_file():
+    print(Panel("[white]Token Management", 
+        title="[bright_white]>> [Setup] <<",
+        width=65,
+        style="bold bright_white"
+    ))
+    
+    while True:
+        current_tokens = []
+        if os.path.exists('token.txt'):
+            with open('token.txt', 'r') as f:
+                current_tokens = [line.strip() for line in f if line.strip()]
+        
+        print(Panel(f"""[yellow]⚡[cyan] Current Tokens : [green]{len(current_tokens)}[/]
+[yellow]⚡[cyan] Options       :
+   [1] Add tokens from file
+   [2] Add single token
+   [3] View current tokens
+   [4] Save and continue
+   [5] Exit""",
+            title="[white on red] TOKEN SETUP [/]",
+            width=65,
+            style="bold bright_white"
+        ))
+        
+        choice = console.input("[bright_white]Enter choice (1-5): ")
+        
+        if choice == "1":
+            print(Panel("[white]Enter Token File Path", 
+                title="[bright_white]>> [Input] <<",
+                width=65,
+                style="bold bright_white",
+                subtitle="╭─────",
+                subtitle_align="left"
+            ))
+            file_path = console.input("[bright_white]   ╰─> ")
+            try:
+                with open(file_path, 'r') as f:
+                    new_tokens = [line.strip() for line in f if line.strip()]
+                    current_tokens.extend(new_tokens)
+                    # Remove duplicates while preserving order
+                    current_tokens = list(dict.fromkeys(current_tokens))
+                    with open('token.txt', 'w') as tf:
+                        tf.write('\n'.join(current_tokens))
+                    print(Panel(f"[green]Added {len(new_tokens)} new tokens! Total: {len(current_tokens)}", 
+                        title="[bright_white]>> [Success] <<",
+                        width=65,
+                        style="bold bright_white"
+                    ))
+            except Exception as e:
+                print(Panel(f"[red]Error reading file: {str(e)}", 
+                    title="[bright_white]>> [Error] <<",
+                    width=65,
+                    style="bold bright_white"
+                ))
+                
+        elif choice == "2":
+            print(Panel("[white]Enter Facebook Token", 
+                title="[bright_white]>> [Input] <<",
+                width=65,
+                style="bold bright_white",
+                subtitle="╭─────",
+                subtitle_align="left"
+            ))
+            token = console.input("[bright_white]   ╰─> ")
+            if token.strip():
+                current_tokens.append(token.strip())
+                current_tokens = list(dict.fromkeys(current_tokens))
+                with open('token.txt', 'w') as f:
+                    f.write('\n'.join(current_tokens))
+                print(Panel(f"[green]Token added! Total tokens: {len(current_tokens)}", 
+                    title="[bright_white]>> [Success] <<",
+                    width=65,
+                    style="bold bright_white"
+                ))
+                
+        elif choice == "3":
+            if current_tokens:
+                token_display = []
+                for i, token in enumerate(current_tokens, 1):
+                    masked_token = f"{token[:10]}...{token[-10:]}"
+                    token_display.append(f"[yellow]⚡[cyan] Token {i}: [green]{masked_token}[/]")
+                print(Panel("\n".join(token_display), 
+                    title="[white on red] CURRENT TOKENS [/]",
+                    width=65,
+                    style="bold bright_white"
+                ))
+            else:
+                print(Panel("[yellow]No tokens found", 
+                    title="[bright_white]>> [Information] <<",
+                    width=65,
+                    style="bold bright_white"
+                ))
+                
+        elif choice == "4":
+            if current_tokens:
+                print(Panel(f"[green]Successfully saved {len(current_tokens)} tokens", 
+                    title="[bright_white]>> [Success] <<",
+                    width=65,
+                    style="bold bright_white"
+                ))
+                return True
+            else:
+                print(Panel("[red]No tokens to save!", 
+                    title="[bright_white]>> [Error] <<",
+                    width=65,
+                    style="bold bright_white"
+                ))
+        elif choice == "5":
+            return False
+
+class Session:
+    def __init__(self):
+        self.key = None
+        self.load_session()
+        
+    def save_session(self, key):
+        try:
+            with open('.session', 'w') as f:
+                f.write(key)
+            self.key = key
+        except:
+            pass
+            
+    def load_session(self):
+        try:
+            if os.path.exists('.session'):
+                with open('.session', 'r') as f:
+                    self.key = f.read().strip()
+        except:
+            self.key = None
+            
+    def clear_session(self):
+        self.key = None
+        if os.path.exists('.session'):
+            try:
+                os.remove('.session')
+            except:
+                pass
+
 async def main():
     try:
         banner()
         
-        # Add authentication check
-        if not check_auth():
-            return
+        session = Session()
+        key_manager = KeyManager()
+        
+        # Auto-login if session exists
+        if session.key:
+            is_valid, message = key_manager.validate_key(session.key)
+            if is_valid:
+                key_info = key_manager.get_key_info(session.key)
+                print(Panel(f"""[yellow]⚡[cyan] Status   : [green]{key_info['status']}[/]
+[yellow]⚡[cyan] Created  : [cyan]{key_info['created_at']}[/]
+[yellow]⚡[cyan] Expires  : [cyan]{key_info['expiry']}[/]
+[yellow]⚡[cyan] Remaining: [yellow]{key_info['remaining']}[/]""",
+                    title="[white on red] KEY INFORMATION [/]",
+                    width=65,
+                    style="bold bright_white"
+                ))
+            else:
+                session.clear_session()
+                if not await manual_login(session, key_manager):
+                    return
+        else:
+            if not await manual_login(session, key_manager):
+                return
         
         config['tokens'] = load_tokens()
         print(Panel(f"[white]Loaded [green]{len(config['tokens'])}[white] tokens", 
