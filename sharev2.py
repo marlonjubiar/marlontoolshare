@@ -20,7 +20,7 @@ console = Console()
 os.system('clear')
 
 # File paths
-TOKEN_PATH = 'token.txt'  # Changed to local path for Termux compatibility
+TOKEN_PATH = '/storage/emulated/0/a/token.txt'
 GLOBAL_SHARE_COUNT_FILE = 'global_share_count.json'
 KEYS_FILE = 'auth_keys.json'
 
@@ -202,79 +202,12 @@ def banner():
         style="bold bright_white",
     ))
 
-def setup_token_file():
-    print(Panel("[white]No token file found. Let's set it up!", 
-        title="[bright_white]>> [Setup] <<",
-        width=65,
-        style="bold bright_white"
-    ))
-    
-    tokens = []
-    while True:
-        print(Panel(f"""[yellow]⚡[cyan] Current Tokens : [green]{len(tokens)}[/]
-[yellow]⚡[cyan] Options       :
-   [1] Add token
-   [2] Save and continue
-   [3] Exit""",
-            title="[white on red] TOKEN SETUP [/]",
-            width=65,
-            style="bold bright_white"
-        ))
-        
-        choice = console.input("[bright_white]Enter choice (1-3): ")
-        
-        if choice == "1":
-            print(Panel("[white]Enter Facebook Token", 
-                title="[bright_white]>> [Input] <<",
-                width=65,
-                style="bold bright_white",
-                subtitle="╭─────",
-                subtitle_align="left"
-            ))
-            token = console.input("[bright_white]   ╰─> ")
-            if token.strip():
-                tokens.append(token.strip())
-                print(Panel(f"[green]Token added successfully! Total tokens: {len(tokens)}", 
-                    title="[bright_white]>> [Success] <<",
-                    width=65,
-                    style="bold bright_white"
-                ))
-        elif choice == "2":
-            if tokens:
-                try:
-                    with open('token.txt', 'w') as f:
-                        f.write('\n'.join(tokens))
-                    print(Panel(f"[green]Successfully saved {len(tokens)} tokens to token.txt", 
-                        title="[bright_white]>> [Success] <<",
-                        width=65,
-                        style="bold bright_white"
-                    ))
-                    return True
-                except Exception as e:
-                    print(Panel(f"[red]Error saving tokens: {str(e)}", 
-                        title="[bright_white]>> [Error] <<",
-                        width=65,
-                        style="bold bright_white"
-                    ))
-            else:
-                print(Panel("[red]No tokens to save!", 
-                    title="[bright_white]>> [Error] <<",
-                    width=65,
-                    style="bold bright_white"
-                ))
-        elif choice == "3":
-            return False
-
 def load_tokens() -> List[str]:
     try:
-        if not os.path.exists('token.txt'):
-            if setup_token_file():
-                with open('token.txt', 'r') as f:
-                    return [line.strip() for line in f if line.strip()]
-            return []
-            
-        with open('token.txt', 'r') as f:
-            return [line.strip() for line in f if line.strip()]
+        if os.path.exists(TOKEN_PATH):
+            with open(TOKEN_PATH, 'r') as f:
+                return [line.strip() for line in f if line.strip()]
+        return []
     except Exception as e:
         console.print(Panel(f"[red]Error loading tokens: {str(e)}", 
             title="[bright_white]>> [Error] <<",
@@ -342,16 +275,12 @@ def check_auth() -> bool:
             return False
             
         key_info = key_manager.get_key_info(key)
-        print(Panel(f"""[yellow]⚡[cyan] Status   : [green]{key_info['status']}[/]
-[yellow]⚡[cyan] Created  : [cyan]{key_info['created_at']}[/]
-[yellow]⚡[cyan] Expires  : [cyan]{key_info['expiry']}[/]
-[yellow]⚡[cyan] Remaining: [yellow]{key_info['remaining']}[/]""",
-            title="[white on red] KEY INFORMATION [/]",
-            width=65,
-            style="bold bright_white"
-        ))
-        print(Panel("[green]Authentication successful!", 
-            title="[bright_white]>> [Success] <<",
+        print(Panel(f"""[green]Authentication successful!
+[white]Key Status: [green]{key_info['status']}
+[white]Created  : [cyan]{key_info['created_at']}
+[white]Expires  : [cyan]{key_info['expiry']}
+[white]Remaining: [yellow]{key_info['remaining']}""", 
+            title="[bright_white]>> [Key Information] <<",
             width=65,
             style="bold bright_white"
         ))
@@ -359,11 +288,10 @@ def check_auth() -> bool:
         
     elif choice == "2":
         key = key_manager.generate_key()
-        print(Panel(f"""[yellow]⚡[cyan] Key      : [green]{key}[/]
-[yellow]⚡[cyan] Status   : [yellow]Pending Approval[/]
-[yellow]⚡[cyan] Price    : [green]P50[/]
-[yellow]⚡[cyan] Duration : [green]3 Days[/]""",
-            title="[white on red] KEY INFORMATION [/]",
+        print(Panel(f"""[white]Your key: [green]{key}
+[yellow]Note: Key requires admin approval before use
+[white]Price: [green]P50 for 3 days access""",
+            title="[bright_white]>> [New Key Generated] <<",
             width=65,
             style="bold bright_white"
         ))
@@ -390,8 +318,8 @@ def check_auth() -> bool:
         # Show list of pending keys
         pending_keys = [k for k, v in key_manager.keys.items() if not v['active']]
         if not pending_keys:
-            print(Panel("[yellow]⚡[cyan] Status : [yellow]No pending keys found[/]", 
-                title="[white on red] PENDING KEYS [/]",
+            print(Panel("[yellow]No pending keys found", 
+                title="[bright_white]>> [Information] <<",
                 width=65,
                 style="bold bright_white"
             ))
@@ -399,8 +327,8 @@ def check_auth() -> bool:
             
         # Display keys with numbers for easier selection
         print(Panel("\n".join(
-            f"[yellow]⚡[cyan] Key {i}   : [white]{key}[/]" for i, key in enumerate(pending_keys, 1)
-        ), title="[white on red] PENDING KEYS [/]",
+            f"[yellow]{i}.[white] {key}" for i, key in enumerate(pending_keys, 1)
+        ), title="[bright_white]>> [Pending Keys] <<",
             width=65,
             style="bold bright_white"
         ))
