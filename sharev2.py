@@ -24,6 +24,7 @@ os.system('clear')
 TOKEN_PATH = '/storage/emulated/0/a/token.txt'
 GLOBAL_SHARE_COUNT_FILE = 'global_share_count.json'
 KEYS_FILE = 'auth_keys.json'
+LAST_KEY_FILE = 'last_key.txt'
 
 # Default admin password hash (password: "password")
 ADMIN_HASH = "5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8"
@@ -116,6 +117,24 @@ class KeyManager:
             
         return True, "Key is valid"
 
+def check_active_key() -> Optional[Dict]:
+    key_manager = KeyManager()
+    try:
+        if os.path.exists(LAST_KEY_FILE):
+            with open(LAST_KEY_FILE, 'r') as f:
+                last_key = f.read().strip()
+                if last_key:
+                    is_valid, _ = key_manager.validate_key(last_key)
+                    if is_valid:
+                        return key_manager.get_key_info(last_key)
+    except:
+        pass
+    return None
+
+def save_last_key(key: str):
+    with open(LAST_KEY_FILE, 'w') as f:
+        f.write(key)
+
 def validate_post_id(post_id: str) -> bool:
     if not post_id:
         return False
@@ -153,6 +172,7 @@ def get_system_info() -> Dict[str, str]:
 def banner():
     os.system('clear')
     sys_info = get_system_info()
+    key_info = check_active_key()
     
     print(Panel(
         r"""[red]●[yellow] ●[green] ●
@@ -187,6 +207,26 @@ def banner():
         width=65,
         style="bold bright_white",
     ))
+
+    if key_info:
+        print(Panel(
+            f"""[yellow]⚡[cyan] Status   : [green]{key_info['status']}[/]
+[yellow]⚡[cyan] Created  : [cyan]{key_info['created_at']}[/]
+[yellow]⚡[cyan] Expires  : [cyan]{key_info['expiry']}[/]
+[yellow]⚡[cyan] Remaining: [yellow]{key_info['remaining']}[/]""",
+            title="[white on red] KEY INFORMATION [/]",
+            width=65,
+            style="bold bright_white",
+        ))
+    else:
+        print(Panel(
+            """[red]No active key found!
+[yellow]Please generate a new key and contact admin for approval
+[white]Price: [green]P50 for 3 days access""",
+            title="[white on red] KEY STATUS [/]",
+            width=65,
+            style="bold bright_white",
+        ))
 
 def load_tokens() -> List[str]:
     while True:
@@ -269,6 +309,10 @@ def save_global_share_count(count: int):
 def check_auth() -> bool:
     key_manager = KeyManager()
     
+    # If we have an active key, skip authentication
+    if check_active_key():
+        return True
+    
     print(Panel("""[1] Enter key
 [2] Generate new key
 [3] Admin: Approve key""",
@@ -298,16 +342,7 @@ def check_auth() -> bool:
             ))
             return False
             
-        key_info = key_manager.get_key_info(key)
-        print(Panel(f"""[green]Authentication successful!
-[yellow]⚡[white] Status   : [green]{key_info['status']}
-[yellow]⚡[white] Created  : [cyan]{key_info['created_at']}
-[yellow]⚡[white] Expires  : [cyan]{key_info['expiry']}
-[yellow]⚡[white] Remaining: [yellow]{key_info['remaining']}""", 
-            title="[bright_white]>> [Key Information] <<",
-            width=65,
-            style="bold bright_white"
-        ))
+        save_last_key(key)
         return True
         
     elif choice == "2":
