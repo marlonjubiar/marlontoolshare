@@ -3,6 +3,8 @@ import asyncio
 import aiohttp
 import sys
 import os
+import time
+import subprocess
 from typing import List, Optional, Dict
 import json
 from datetime import datetime, timedelta
@@ -35,6 +37,68 @@ config = {
     'total_shares': 0,
     'target_shares': 0
 }
+
+def loading_animation(duration: int, message: str):
+    """Show a loading animation for specified duration"""
+    frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+    end_time = time.time() + duration
+    i = 0
+    while time.time() < end_time:
+        print(f"\r{frames[i]} {message}", end="")
+        time.sleep(0.1)
+        i = (i + 1) % len(frames)
+    print("\r" + " " * (len(message) + 2))  # Clear the line
+
+def update_tool():
+    """Update tool using git pull"""
+    try:
+        print(Panel("[white]Checking for updates...", 
+            title="[bright_white]>> [Update Check] <<",
+            width=65,
+            style="bold bright_white"
+        ))
+        
+        result = subprocess.run(['git', 'pull'], capture_output=True, text=True)
+        
+        if "Already up to date" in result.stdout:
+            print(Panel("[green]Tool is already up to date!", 
+                title="[bright_white]>> [Update Status] <<",
+                width=65,
+                style="bold bright_white"
+            ))
+            time.sleep(2)
+        else:
+            print(Panel("[green]Tool updated successfully!\n[yellow]Please restart the script.", 
+                title="[bright_white]>> [Update Status] <<",
+                width=65,
+                style="bold bright_white"
+            ))
+            sys.exit(0)
+    except Exception as e:
+        print(Panel(f"[red]Update failed: {str(e)}", 
+            title="[bright_white]>> [Error] <<",
+            width=65,
+            style="bold bright_white"
+        ))
+        time.sleep(2)
+
+def show_main_menu():
+    print(Panel("""[1] Start Share Process
+[2] Update Tool
+[3] Exit""",
+        title="[bright_white]>> [Main Menu] <<",
+        width=65,
+        style="bold bright_white"
+    ))
+    
+    choice = console.input("[bright_white]Enter choice (1-3): ")
+    
+    if choice == "2":
+        update_tool()
+        return True
+    elif choice == "3":
+        return False
+    return True
 
 class KeyManager:
     def __init__(self, keys_file=KEYS_FILE):
@@ -135,36 +199,49 @@ def save_last_key(key: str):
     with open(LAST_KEY_FILE, 'w') as f:
         f.write(key)
 
-def validate_post_id(post_id: str) -> bool:
-    if not post_id:
-        return False
-    post_id_pattern = r'^[0-9]+$'
-    return bool(re.match(post_id_pattern, post_id))
-
-def validate_share_count(count: str) -> bool:
-    try:
-        count = int(count)
-        return 0 < count <= 1000
-    except ValueError:
-        return False
-
 def get_system_info() -> Dict[str, str]:
     try:
-        ip_info = requests.get('https://ipapi.co/json/', timeout=5).json()
+        # Use multiple IP APIs as fallback
+        apis = [
+            'https://ipapi.co/json/',
+            'https://api.ipify.org?format=json',
+            'https://api.myip.com'
+        ]
+        
+        for api in apis:
+            try:
+                response = requests.get(api, timeout=3)
+                if response.status_code == 200:
+                    ip_info = response.json()
+                    break
+            except:
+                continue
+                
+        if 'ip' not in ip_info:
+            # Try another method for IP info
+            backup_response = requests.get('https://api64.ipify.org?format=json', timeout=3)
+            ip_info = backup_response.json()
+            
+            # Get location info separately
+            location_response = requests.get(f'https://ipapi.co/{ip_info["ip"]}/json/', timeout=3)
+            location_info = location_response.json()
+            ip_info.update(location_info)
+        
         ph_tz = pytz.timezone('Asia/Manila')
         ph_time = datetime.now(ph_tz)
+        
         return {
-            'ip': ip_info.get('ip', 'Unknown'),
-            'region': ip_info.get('region', 'Unknown'),
-            'city': ip_info.get('city', 'Unknown'),
+            'ip': ip_info.get('ip', 'Checking...'),
+            'region': ip_info.get('region', 'Checking...'),
+            'city': ip_info.get('city', 'Checking...'),
             'time': ph_time.strftime("%I:%M:%S %p"),
             'date': ph_time.strftime("%B %d, %Y")
         }
     except:
         return {
-            'ip': 'Unknown',
-            'region': 'Unknown',
-            'city': 'Unknown',
+            'ip': 'Checking...',
+            'region': 'Checking...',
+            'city': 'Checking...',
             'time': datetime.now().strftime("%I:%M:%S %p"),
             'date': datetime.now().strftime("%B %d, %Y")
         }
@@ -227,6 +304,19 @@ def banner():
             width=65,
             style="bold bright_white",
         ))
+
+def validate_post_id(post_id: str) -> bool:
+    if not post_id:
+        return False
+    post_id_pattern = r'^[0-9]+$'
+    return bool(re.match(post_id_pattern, post_id))
+
+def validate_share_count(count: str) -> bool:
+    try:
+        count = int(count)
+        return 0 < count <= 1000
+    except ValueError:
+        return False
 
 def load_tokens() -> List[str]:
     while True:
@@ -497,15 +587,19 @@ async def main():
         
         config['tokens'] = load_tokens()
         if config['tokens']:
+            print(Panel("[white]Loading tokens...", 
+                title="[bright_white]>> [Process] <<",
+                width=65,
+                style="bold bright_white"
+            ))
+            loading_animation(3, "Processing tokens...")
             print(Panel(f"""[green]Tokens loaded successfully!
 [yellow]⚡[white] Total tokens: [cyan]{len(config['tokens'])}""",
                 title="[bright_white]>> [Success] <<",
                 width=65,
-                style="bold bright_white",
-                subtitle="╭─────",
-                subtitle_align="left"
+                style="bold bright_white"
             ))
-            console.input("[bright_white]   ╰─> ")
+            time.sleep(1)
             banner()
         else:
             print(Panel("[red]No tokens loaded! Please add tokens first.", 
@@ -563,6 +657,7 @@ async def main():
 [yellow]⚡[white] Tokens: [cyan]{len(config['tokens'])}
 [yellow]⚡[white] Shares per token: [cyan]{share_count}
 [yellow]⚡[white] Total target shares: [cyan]{config['target_shares']}
+
 [white]Press Enter to start...""",
             title="[bright_white]>> [Configuration Summary] <<",
             width=65,
@@ -623,6 +718,15 @@ def restart_script():
 
 if __name__ == "__main__":
     while True:
+        banner()
+        if not show_main_menu():
+            print(Panel("[yellow]Thanks for using SpamShare!", 
+                title="[bright_white]>> [Goodbye] <<",
+                width=65,
+                style="bold bright_white"
+            ))
+            break
+            
         asyncio.run(main())
         if not restart_script():
             print(Panel("[yellow]Thanks for using SpamShare!", 
