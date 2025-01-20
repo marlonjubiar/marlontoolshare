@@ -562,15 +562,6 @@ async def main():
             style="bold bright_white"
         ))
 
-        print(Panel("[white]Press Enter to exit...", 
-            title="[bright_white]>> [Exit] <<",
-            width=65,
-            style="bold bright_white",
-            subtitle="╭─────",
-            subtitle_align="left"
-        ))
-        console.input("[bright_white]   ╰─> ")
-
     except KeyboardInterrupt:
         print(Panel("[yellow]Process interrupted by user", 
             title="[bright_white]>> [Interrupted] <<",
@@ -584,5 +575,25 @@ async def main():
             style="bold bright_white"
         ))
 
+def restart_script():
+    print(Panel("[white]Press Enter to restart or type 'exit' to quit", 
+        title="[bright_white]>> [Restart] <<",
+        width=65,
+        style="bold bright_white",
+        subtitle="╭─────",
+        subtitle_align="left"
+    ))
+    choice = console.input("[bright_white]   ╰─> ")
+    return choice.lower() != 'exit'
+
 if __name__ == "__main__":
-    asyncio.run(main())
+    while True:
+        asyncio.run(main())
+        if not restart_script():
+            print(Panel("[yellow]Thanks for using SpamShare!", 
+                title="[bright_white]>> [Goodbye] <<",
+                width=65,
+                style="bold bright_white"
+            ))
+            break
+        os.system('clear')
