@@ -601,6 +601,92 @@ async def main():
                 style="bold bright_white"
             ))
             return
+            
+        config['post_id'] = post_id
+        banner()
+
+        # Share Count Input
+        print(Panel("[white]Enter shares per token (1-1000)", 
+            title="[bright_white]>> [Share Configuration] <<",
+            width=65,
+            style="bold bright_white",
+            subtitle="╭─────",
+            subtitle_align="left"
+        ))
+        share_input = console.input("[bright_white]   ╰─> ")
+        
+        if not validate_share_count(share_input):
+            print(Panel("[red]Invalid share count! Please enter a number between 1 and 1000.", 
+                title="[bright_white]>> [Error] <<",
+                width=65,
+                style="bold bright_white"
+            ))
+            return
+            
+        share_count = int(share_input)
+        config['target_shares'] = share_count * len(config['tokens'])
+        banner()
+
+        # Configuration Summary
+        print(Panel(f"""[yellow]⚡[white] Post ID: [cyan]{config['post_id']}
+[yellow]⚡[white] Tokens: [cyan]{len(config['tokens'])}
+[yellow]⚡[white] Shares per token: [cyan]{share_count}
+[yellow]⚡[white] Total target shares: [cyan]{config['target_shares']}
+[white]Press Enter to start...""",
+            title="[bright_white]>> [Configuration Summary] <<",
+            width=65,
+            style="bold bright_white",
+            subtitle="╭─────",
+            subtitle_align="left"
+        ))
+        proceed = console.input("[bright_white]   ╰─> ")
+        banner()
+
+        # Start sharing process
+        print(Panel("[green]Starting share process...", 
+            title="[bright_white]>> [Process Started] <<",
+            width=65,
+            style="bold bright_white"
+        ))
+        
+        share_manager = ShareManager()
+        async with aiohttp.ClientSession() as session:
+            tasks = []
+            for token in config['tokens']:
+                task = asyncio.create_task(share_manager.share(session, token, share_count))
+                tasks.append(task)
+            await asyncio.gather(*tasks)
+        
+        print(Panel(f"""[green]Process completed!
+[yellow]⚡[white] Total shares: [cyan]{share_manager.global_share_count}
+[yellow]⚡[white] Successful: [green]{share_manager.success_count}
+[yellow]⚡[white] Failed: [red]{share_manager.error_count}""",
+            title="[bright_white]>> [Completed] <<",
+            width=65,
+            style="bold bright_white"
+        ))
+
+        print(Panel("[white]Press Enter to exit...", 
+            title="[bright_white]>> [Exit] <<",
+            width=65,
+            style="bold bright_white",
+            subtitle="╭─────",
+            subtitle_align="left"
+        ))
+        console.input("[bright_white]   ╰─> ")
+
+    except KeyboardInterrupt:
+        print(Panel("[yellow]Process interrupted by user", 
+            title="[bright_white]>> [Interrupted] <<",
+            width=65,
+            style="bold bright_white"
+        ))
+    except Exception as e:
+        print(Panel(f"[red]Error: {str(e)}", 
+            title="[bright_white]>> [Error] <<",
+            width=65,
+            style="bold bright_white"
+        ))
 
             if post_id.lower() == 'back':
                 continue
