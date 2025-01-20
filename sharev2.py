@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import asyncio
 import aiohttp
 import sys
@@ -54,7 +55,7 @@ class KeyManager:
             json.dump(self.keys, f, indent=4)
 
     def generate_key(self) -> str:
-        key = secrets.token_hex(8)  # Shorter 16-character key
+        key = secrets.token_hex(8)
         timestamp = datetime.now(self.ph_tz).strftime('%Y%m%d%H%M%S')
         full_key = f"{key}-{timestamp}"
         
@@ -89,21 +90,6 @@ class KeyManager:
             'status': "Active" if key_data['active'] else "Pending Approval",
             'is_expired': now > expiry
         }
-
-    def list_keys(self) -> List[Dict]:
-        now = datetime.now(self.ph_tz)
-        keys_info = []
-        for key, data in self.keys.items():
-            expiry = datetime.strptime(data['expiry'], '%Y-%m-%d %H:%M:%S')
-            expiry = self.ph_tz.localize(expiry)
-            
-            if now <= expiry:  # Only show non-expired keys
-                keys_info.append({
-                    'key': key,
-                    'status': "Active" if data['active'] else "Pending",
-                    'expiry': data['expiry']
-                })
-        return keys_info
 
     def approve_key(self, key: str) -> bool:
         if key in self.keys:
@@ -203,28 +189,22 @@ def banner():
     ))
 
 def load_tokens() -> List[str]:
-    try:
-        while True:
-            print(Panel("""[1] Load from default path (/storage/emulated/0/a/token.txt)
-[2] Import tokens from custom file
-[3] Import multiple token files""",
-                title="[bright_white]>> [Token Import] <<",
-                width=65,
-                style="bold bright_white",
-                subtitle="╭─────",
-                subtitle_align="left"
-            ))
-            choice = console.input("[bright_white]   ╰─> ")
+    while True:
+        print(Panel("""[1] Load from default path (/storage/emulated/0/a/token.txt)
+[2] Import tokens from custom file""",
+            title="[bright_white]>> [Token Import] <<",
+            width=65,
+            style="bold bright_white",
+            subtitle="╭─────",
+            subtitle_align="left"
+        ))
+        choice = console.input("[bright_white]   ╰─> ")
 
+        try:
             if choice == "1":
                 if os.path.exists(TOKEN_PATH):
                     with open(TOKEN_PATH, 'r') as f:
                         tokens = [line.strip() for line in f if line.strip()]
-                    print(Panel(f"[green]Successfully loaded {len(tokens)} tokens", 
-                        title="[bright_white]>> [Success] <<",
-                        width=65,
-                        style="bold bright_white"
-                    ))
                     return tokens
                 else:
                     print(Panel("[red]Default token file not found!", 
@@ -232,7 +212,6 @@ def load_tokens() -> List[str]:
                         width=65,
                         style="bold bright_white"
                     ))
-                    continue
 
             elif choice == "2":
                 print(Panel("[white]Enter token file path", 
@@ -247,71 +226,19 @@ def load_tokens() -> List[str]:
                 if os.path.exists(file_path):
                     with open(file_path, 'r') as f:
                         tokens = [line.strip() for line in f if line.strip()]
-                    print(Panel(f"[green]Successfully loaded {len(tokens)} tokens", 
-                        title="[bright_white]>> [Success] <<",
-                        width=65,
-                        style="bold bright_white"
-                    ))
                     return tokens
                 else:
-                    print(Panel("[red]File not found! Please try again.", 
+                    print(Panel("[red]File not found!", 
                         title="[bright_white]>> [Error] <<",
                         width=65,
                         style="bold bright_white"
                     ))
-                    continue
-
-            elif choice == "3":
-                all_tokens = []
-                while True:
-                    print(Panel("[white]Enter token file path (or 'done' to finish)", 
-                        title="[bright_white]>> [Multiple Files] <<",
-                        width=65,
-                        style="bold bright_white",
-                        subtitle="╭─────",
-                        subtitle_align="left"
-                    ))
-                    file_path = console.input("[bright_white]   ╰─> ")
-                    
-                    if file_path.lower() == 'done':
-                        if all_tokens:
-                            print(Panel(f"[green]Successfully loaded {len(all_tokens)} total tokens", 
-                                title="[bright_white]>> [Success] <<",
-                                width=65,
-                                style="bold bright_white"
-                            ))
-                            return all_tokens
-                        continue
-                        
-                    if os.path.exists(file_path):
-                        with open(file_path, 'r') as f:
-                            tokens = [line.strip() for line in f if line.strip()]
-                            all_tokens.extend(tokens)
-                        print(Panel(f"[green]Added {len(tokens)} tokens from {file_path}", 
-                            title="[bright_white]>> [Success] <<",
-                            width=65,
-                            style="bold bright_white"
-                        ))
-                    else:
-                        print(Panel("[red]File not found! Try another path.", 
-                            title="[bright_white]>> [Error] <<",
-                            width=65,
-                            style="bold bright_white"
-                        ))
-            
-            print(Panel("[yellow]Invalid choice! Please try again.", 
+        except Exception as e:
+            print(Panel(f"[red]Error: {str(e)}", 
                 title="[bright_white]>> [Error] <<",
                 width=65,
                 style="bold bright_white"
             ))
-
-    except Exception as e:
-        print(Panel(f"[red]Error loading tokens: {str(e)}", 
-            title="[bright_white]>> [Error] <<",
-            width=65,
-            style="bold bright_white"
-        ))
-        return []
 
 def load_global_share_count() -> int:
     try:
@@ -321,7 +248,7 @@ def load_global_share_count() -> int:
                 return int(data.get('count', 0))
         return 0
     except Exception as e:
-        console.print(Panel(f"[red]Error loading share count: {str(e)}", 
+        print(Panel(f"[red]Error loading share count: {str(e)}", 
             title="[bright_white]>> [Error] <<",
             width=65,
             style="bold bright_white"
@@ -333,7 +260,7 @@ def save_global_share_count(count: int):
         with open(GLOBAL_SHARE_COUNT_FILE, 'w') as f:
             json.dump({'count': count}, f)
     except Exception as e:
-        console.print(Panel(f"[red]Error saving share count: {str(e)}", 
+        print(Panel(f"[red]Error saving share count: {str(e)}", 
             title="[bright_white]>> [Error] <<",
             width=65,
             style="bold bright_white"
@@ -373,10 +300,10 @@ def check_auth() -> bool:
             
         key_info = key_manager.get_key_info(key)
         print(Panel(f"""[green]Authentication successful!
-[white]Key Status: [green]{key_info['status']}
-[white]Created  : [cyan]{key_info['created_at']}
-[white]Expires  : [cyan]{key_info['expiry']}
-[white]Remaining: [yellow]{key_info['remaining']}""", 
+[yellow]⚡[white] Status   : [green]{key_info['status']}
+[yellow]⚡[white] Created  : [cyan]{key_info['created_at']}
+[yellow]⚡[white] Expires  : [cyan]{key_info['expiry']}
+[yellow]⚡[white] Remaining: [yellow]{key_info['remaining']}""", 
             title="[bright_white]>> [Key Information] <<",
             width=65,
             style="bold bright_white"
@@ -387,7 +314,8 @@ def check_auth() -> bool:
         key = key_manager.generate_key()
         print(Panel(f"""[white]Your key: [green]{key}
 [yellow]Note: Key requires admin approval before use
-[white]Price: [green]P50 for 3 days access""",
+[white]Price: [green]P50 for 3 days access
+[white]Press Enter to continue...""",
             title="[bright_white]>> [New Key Generated] <<",
             width=65,
             style="bold bright_white",
@@ -415,62 +343,58 @@ def check_auth() -> bool:
             ))
             return False
 
-        # Show list of pending keys
         pending_keys = [k for k, v in key_manager.keys.items() if not v['active']]
-        if not pending_keys:
+        if pending_keys:
+            print(Panel("\n".join(
+                f"[yellow]{i}.[white] {key}" for i, key in enumerate(pending_keys, 1)
+            ), title="[bright_white]>> [Pending Keys] <<",
+                width=65,
+                style="bold bright_white"
+            ))
+            
+            print(Panel("[white]Enter Key Number to Approve (1, 2, 3, etc.)", 
+                title="[bright_white]>> [Key Approval] <<",
+                width=65,
+                style="bold bright_white",
+                subtitle="╭─────",
+                subtitle_align="left"
+            ))
+            key_num = console.input("[bright_white]   ╰─> ")
+            
+            try:
+                key_index = int(key_num) - 1
+                if 0 <= key_index < len(pending_keys):
+                    key_to_approve = pending_keys[key_index]
+                    if key_manager.approve_key(key_to_approve):
+                        print(Panel("[green]Key approved successfully!", 
+                            title="[bright_white]>> [Success] <<",
+                            width=65,
+                            style="bold bright_white"
+                        ))
+                    else:
+                        print(Panel("[red]Error approving key", 
+                            title="[bright_white]>> [Error] <<",
+                            width=65,
+                            style="bold bright_white"
+                        ))
+                else:
+                    print(Panel("[red]Invalid key number", 
+                        title="[bright_white]>> [Error] <<",
+                        width=65,
+                        style="bold bright_white"
+                    ))
+            except ValueError:
+                print(Panel("[red]Please enter a valid number", 
+                    title="[bright_white]>> [Error] <<",
+                    width=65,
+                    style="bold bright_white"
+                ))
+        else:
             print(Panel("[yellow]No pending keys found", 
                 title="[bright_white]>> [Information] <<",
                 width=65,
                 style="bold bright_white"
             ))
-            return False
-            
-        # Display keys with numbers for easier selection
-        print(Panel("\n".join(
-            f"[yellow]{i}.[white] {key}" for i, key in enumerate(pending_keys, 1)
-        ), title="[bright_white]>> [Pending Keys] <<",
-            width=65,
-            style="bold bright_white"
-        ))
-        
-        print(Panel("[white]Enter Key Number to Approve (1, 2, 3, etc.)", 
-            title="[bright_white]>> [Key Approval] <<",
-            width=65,
-            style="bold bright_white",
-            subtitle="╭─────",
-            subtitle_align="left"
-        ))
-        key_num = console.input("[bright_white]   ╰─> ")
-        
-        try:
-            key_index = int(key_num) - 1
-            if 0 <= key_index < len(pending_keys):
-                key_to_approve = pending_keys[key_index]
-                if key_manager.approve_key(key_to_approve):
-                    print(Panel("[green]Key approved successfully!", 
-                        title="[bright_white]>> [Success] <<",
-                        width=65,
-                        style="bold bright_white"
-                    ))
-                else:
-                    print(Panel("[red]Error approving key", 
-                        title="[bright_white]>> [Error] <<",
-                        width=65,
-                        style="bold bright_white"
-                    ))
-            else:
-                print(Panel("[red]Invalid key number", 
-                    title="[bright_white]>> [Error] <<",
-                    width=65,
-                    style="bold bright_white"
-                ))
-        except ValueError:
-            print(Panel("[red]Please enter a valid number", 
-                title="[bright_white]>> [Error] <<",
-                width=65,
-                style="bold bright_white"
-            ))
-            
         return False
     
     return False
@@ -529,38 +453,13 @@ class ShareManager:
                 console.print(f"[red]Share failed: {str(e)}")
                 await asyncio.sleep(1)
 
-async def get_user_input(prompt: str, validator_func, error_message: str) -> Optional[str]:
-    while True:
-        print(Panel(prompt, 
-            title="[bright_white]>> [Input] <<",
-            width=65,
-            style="bold bright_white",
-            subtitle="╭─────",
-            subtitle_align="left"
-        ))
-        user_input = console.input("[bright_white]   ╰─> ")
-        
-        if user_input.lower() == 'exit':
-            return None
-            
-        if validator_func(user_input):
-            return user_input
-        else:
-            print(Panel(f"[red]{error_message}", 
-                title="[bright_white]>> [Error] <<",
-                width=65,
-                style="bold bright_white"
-            ))
-
 async def main():
     try:
         banner()
         
-        # Add authentication check
         if not check_auth():
             return
         
-        # Token Import
         config['tokens'] = load_tokens()
         if config['tokens']:
             print(Panel(f"""[green]Tokens loaded successfully!
@@ -582,7 +481,7 @@ async def main():
             return
 
         # Post ID Input
-        print(Panel("[white]Enter Post ID (or 'exit' to quit)", 
+        print(Panel("[white]Enter Post ID", 
             title="[bright_white]>> [Post Configuration] <<",
             width=65,
             style="bold bright_white",
@@ -591,9 +490,6 @@ async def main():
         ))
         post_id = console.input("[bright_white]   ╰─> ")
         
-        if post_id.lower() == 'exit':
-            return
-            
         if not validate_post_id(post_id):
             print(Panel("[red]Invalid Post ID format! Please enter a valid numeric ID.", 
                 title="[bright_white]>> [Error] <<",
@@ -687,127 +583,6 @@ async def main():
             width=65,
             style="bold bright_white"
         ))
-
-            if post_id.lower() == 'back':
-                continue
-
-        config['post_id'] = post_id
-        banner()
-
-        # Share Count Input
-        print(Panel("[white]Enter shares per token (1-1000)", 
-            title="[bright_white]>> [Share Configuration] <<",
-            width=65,
-            style="bold bright_white",
-            subtitle="╭─────",
-            subtitle_align="left"
-        ))
-        share_input = console.input("[bright_white]   ╰─> ")
-        
-        if not validate_share_count(share_input):
-            print(Panel("[red]Invalid share count! Please enter a number between 1 and 1000.", 
-                title="[bright_white]>> [Error] <<",
-                width=65,
-                style="bold bright_white"
-            ))
-            return
-            
-        share_count = int(share_input)
-        config['target_shares'] = share_count * len(config['tokens'])
-        banner()
-
-        # Configuration Summary
-        print(Panel(f"""[yellow]⚡[white] Post ID: [cyan]{config['post_id']}
-[yellow]⚡[white] Tokens: [cyan]{len(config['tokens'])}
-[yellow]⚡[white] Shares per token: [cyan]{share_count}
-[yellow]⚡[white] Total target shares: [cyan]{config['target_shares']}""",
-            title="[bright_white]>> [Configuration Summary] <<",
-            width=65,
-            style="bold bright_white",
-            subtitle="╭─────",
-            subtitle_align="left"
-        ))
-        proceed = console.input("[bright_white]   ╰─> ")
-        if proceed.lower() != 'y':
-            return
-        banner()
-
-            if share_input.lower() == 'back':
-                continue
-
-            # Configuration Summary
-            print(Panel(f"""[white]Configuration Summary:
-[yellow]⚡[white] Post ID: [cyan]{config['post_id']}
-[yellow]⚡[white] Tokens: [cyan]{len(config['tokens'])}
-[yellow]⚡[white] Shares per token: [cyan]{share_count}
-[yellow]⚡[white] Total target shares: [cyan]{config['target_shares']}""",
-                title="[bright_white]>> [Summary] <<",
-                width=65,
-                style="bold bright_white"
-            ))
-
-            print(Panel("[white]Press Enter to start or type 'back' to reconfigure", 
-                title="[bright_white]>> [Confirmation] <<",
-                width=65,
-                style="bold bright_white",
-                subtitle="╭─────",
-                subtitle_align="left"
-            ))
-            confirm = console.input("[bright_white]   ╰─> ")
-            
-            if confirm.lower() == 'back':
-                continue
-
-            # Start sharing process
-            share_manager = ShareManager()
-            
-            print(Panel("[green]Starting share process...", 
-                title="[bright_white]>> [Process Started] <<",
-                width=65,
-                style="bold bright_white"
-            ))
-            
-            async with aiohttp.ClientSession() as session:
-                tasks = []
-                for token in config['tokens']:
-                    task = asyncio.create_task(share_manager.share(session, token, share_count))
-                    tasks.append(task)
-                await asyncio.gather(*tasks)
-            
-            print(Panel(f"""[green]Process completed!
-[yellow]⚡[white] Total shares: [cyan]{share_manager.global_share_count}
-[yellow]⚡[white] Successful: [green]{share_manager.success_count}
-[yellow]⚡[white] Failed: [red]{share_manager.error_count}""",
-                title="[bright_white]>> [Completed] <<",
-                width=65,
-                style="bold bright_white"
-            ))
-
-            print(Panel("[white]Press Enter to continue or 'exit' to quit", 
-                title="[bright_white]>> [Next Action] <<",
-                width=65,
-                style="bold bright_white",
-                subtitle="╭─────",
-                subtitle_align="left"
-            ))
-            action = console.input("[bright_white]   ╰─> ")
-            if action.lower() == 'exit':
-                break
-
-        except KeyboardInterrupt:
-            print(Panel("[yellow]Process interrupted by user", 
-                title="[bright_white]>> [Interrupted] <<",
-                width=65,
-                style="bold bright_white"
-            ))
-            break
-        except Exception as e:
-            print(Panel(f"[red]Error: {str(e)}", 
-                title="[bright_white]>> [Error] <<",
-                width=65,
-                style="bold bright_white"
-            ))
-            continue
 
 if __name__ == "__main__":
     asyncio.run(main())
