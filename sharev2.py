@@ -390,8 +390,11 @@ def check_auth() -> bool:
 [white]Price: [green]P50 for 3 days access""",
             title="[bright_white]>> [New Key Generated] <<",
             width=65,
-            style="bold bright_white"
+            style="bold bright_white",
+            subtitle="╭─────",
+            subtitle_align="left"
         ))
+        console.input("[bright_white]   ╰─> ")
         return False
         
     elif choice == "3":
@@ -550,76 +553,98 @@ async def get_user_input(prompt: str, validator_func, error_message: str) -> Opt
             ))
 
 async def main():
-    while True:
-        try:
+    try:
+        banner()
+        
+        # Add authentication check
+        if not check_auth():
+            return
+        
+        # Token Import
+        config['tokens'] = load_tokens()
+        if config['tokens']:
+            print(Panel(f"""[green]Tokens loaded successfully!
+[yellow]⚡[white] Total tokens: [cyan]{len(config['tokens'])}""",
+                title="[bright_white]>> [Success] <<",
+                width=65,
+                style="bold bright_white",
+                subtitle="╭─────",
+                subtitle_align="left"
+            ))
+            console.input("[bright_white]   ╰─> ")
             banner()
-            
-            # Add authentication check
-            if not check_auth():
-                continue
-            
-            config['tokens'] = load_tokens()
-            if not config['tokens']:
-                print(Panel("[red]No tokens loaded! Please add tokens first.", 
-                    title="[bright_white]>> [Error] <<",
-                    width=65,
-                    style="bold bright_white"
-                ))
-                continue
+        else:
+            print(Panel("[red]No tokens loaded! Please add tokens first.", 
+                title="[bright_white]>> [Error] <<",
+                width=65,
+                style="bold bright_white"
+            ))
+            return
 
-            # Post ID Input
-            while True:
-                print(Panel("[white]Enter Post ID (or 'back' to return)", 
-                    title="[bright_white]>> [Post Configuration] <<",
-                    width=65,
-                    style="bold bright_white",
-                    subtitle="╭─────",
-                    subtitle_align="left"
-                ))
-                post_id = console.input("[bright_white]   ╰─> ")
-                
-                if post_id.lower() == 'back':
-                    break
-                    
-                if validate_post_id(post_id):
-                    config['post_id'] = post_id
-                    break
-                else:
-                    print(Panel("[red]Invalid Post ID format! Please enter a valid numeric ID.", 
-                        title="[bright_white]>> [Error] <<",
-                        width=65,
-                        style="bold bright_white"
-                    ))
-                    continue
+        # Post ID Input
+        print(Panel("[white]Enter Post ID (or 'exit' to quit)", 
+            title="[bright_white]>> [Post Configuration] <<",
+            width=65,
+            style="bold bright_white",
+            subtitle="╭─────",
+            subtitle_align="left"
+        ))
+        post_id = console.input("[bright_white]   ╰─> ")
+        
+        if post_id.lower() == 'exit':
+            return
+            
+        if not validate_post_id(post_id):
+            print(Panel("[red]Invalid Post ID format! Please enter a valid numeric ID.", 
+                title="[bright_white]>> [Error] <<",
+                width=65,
+                style="bold bright_white"
+            ))
+            return
 
             if post_id.lower() == 'back':
                 continue
 
-            # Share Count Input
-            while True:
-                print(Panel("[white]Enter shares per token (1-1000) (or 'back' to return)", 
-                    title="[bright_white]>> [Share Configuration] <<",
-                    width=65,
-                    style="bold bright_white",
-                    subtitle="╭─────",
-                    subtitle_align="left"
-                ))
-                share_input = console.input("[bright_white]   ╰─> ")
-                
-                if share_input.lower() == 'back':
-                    break
-                    
-                if validate_share_count(share_input):
-                    share_count = int(share_input)
-                    config['target_shares'] = share_count * len(config['tokens'])
-                    break
-                else:
-                    print(Panel("[red]Invalid share count! Please enter a number between 1 and 1000.", 
-                        title="[bright_white]>> [Error] <<",
-                        width=65,
-                        style="bold bright_white"
-                    ))
-                    continue
+        config['post_id'] = post_id
+        banner()
+
+        # Share Count Input
+        print(Panel("[white]Enter shares per token (1-1000)", 
+            title="[bright_white]>> [Share Configuration] <<",
+            width=65,
+            style="bold bright_white",
+            subtitle="╭─────",
+            subtitle_align="left"
+        ))
+        share_input = console.input("[bright_white]   ╰─> ")
+        
+        if not validate_share_count(share_input):
+            print(Panel("[red]Invalid share count! Please enter a number between 1 and 1000.", 
+                title="[bright_white]>> [Error] <<",
+                width=65,
+                style="bold bright_white"
+            ))
+            return
+            
+        share_count = int(share_input)
+        config['target_shares'] = share_count * len(config['tokens'])
+        banner()
+
+        # Configuration Summary
+        print(Panel(f"""[yellow]⚡[white] Post ID: [cyan]{config['post_id']}
+[yellow]⚡[white] Tokens: [cyan]{len(config['tokens'])}
+[yellow]⚡[white] Shares per token: [cyan]{share_count}
+[yellow]⚡[white] Total target shares: [cyan]{config['target_shares']}""",
+            title="[bright_white]>> [Configuration Summary] <<",
+            width=65,
+            style="bold bright_white",
+            subtitle="╭─────",
+            subtitle_align="left"
+        ))
+        proceed = console.input("[bright_white]   ╰─> ")
+        if proceed.lower() != 'y':
+            return
+        banner()
 
             if share_input.lower() == 'back':
                 continue
