@@ -1,21 +1,49 @@
-import os
-import sys
-import time
-import requests
-import random
-import json
-import re
-from datetime import datetime
-import threading
+#! /usr/bin/env python3
+try:
+    import requests, json, time, os, random, re, datetime, sys, threading
+    from rich.columns import Columns
+    from rich import print as printf
+    from rich.panel import Panel
+    from rich.console import Console
+    from requests.exceptions import RequestException
+except (ModuleNotFoundError, ImportError) as error:
+    print(f"[Error]: {error}!")
+    exit()
+
+SUKSES, GAGAL, CACHE = [], [], []
 
 def clear():
-    os.system('clear')
+    os.system("cls" if os.name == "nt" else "clear")
+
+def BANNER() -> None:
+    clear()
+    printf(
+        Panel(
+            r"""[bold red]●[bold yellow] ●[bold green] ●[/]
+[bold blue] ______     **     **____     ______    
+[bold blue]/\  == \   /\ \   /\  __ \   /\  == \   
+[bold blue]\ \  **<   \ \ \  \ \  ** \  \ \  __<   
+[bold blue] \ \_____\  \ \_\  \ \_\ \_\  \ \_\ \_\ 
+[bold blue]  \/_____/   \/_/   \/_/\/_/   \/_/ /_/
+        [underline white]Facebook Auto React - By BIAR""", 
+            style="bold bright_black", 
+            width=60
+        )
+    )
+
+def DELAY(minutes: int, seconds: int, process_info: str) -> None:
+    total = (minutes * 60 + seconds)
+    while total:
+        minutes, seconds = divmod(total, 60)
+        printf(f"[bold bright_black]   ──>[bold green] {process_info}[bold white]/[bold green]{minutes:02d}:{seconds:02d}[bold white] SUCCESS:[bold green]{len(SUKSES)}[bold white] FAILED:[bold red]{len(GAGAL)}     ", end='\r')
+        time.sleep(1)
+        total -= 1
+    printf(" " * 100, end='\r')  # Clear the line
 
 class TokenManager:
     def __init__(self):
         self.token_path = "/storage/emulated/0/a/token.txt"
         self.tokens = self.load_tokens()
-        # Create directory if it doesn't exist
         os.makedirs(os.path.dirname(self.token_path), exist_ok=True)
 
     def load_tokens(self):
@@ -61,19 +89,6 @@ class FacebookAutoReact:
 
     def extract_post_details(self, url):
         try:
-            tds_response = requests.post('https://id.traodoisub.com/api.php', data={'link': url})
-            tds_data = tds_response.json()
-            
-            if tds_data.get('success') == 200:
-                post_id = tds_data.get('id')
-                user_id = re.search(r'/(\d+)/', url)
-                if user_id:
-                    return {
-                        'post_id': post_id,
-                        'user_id': user_id.group(1),
-                        'full_id': f"{user_id.group(1)}_{post_id}"
-                    }
-
             patterns = [
                 r'\/(\d+)\/posts\/(\d+)',
                 r'fbid=(\d+)',
@@ -104,7 +119,8 @@ class FacebookAutoReact:
         try:
             response = self.session.get(
                 'https://graph.facebook.com/me',
-                params={'access_token': token, 'fields': 'id,name'}
+                params={'access_token': token, 'fields': 'id,name'},
+                timeout=15
             )
             if response.ok:
                 data = response.json()
@@ -119,11 +135,16 @@ class FacebookAutoReact:
 
     def perform_reaction(self, token, post_details, reaction_type):
         methods = [self._react_method_1, self._react_method_2, self._react_method_3]
+        random.shuffle(methods)
+        
         for method in methods:
             try:
                 if method(token, post_details, reaction_type):
                     return True
-            except:
+                time.sleep(random.uniform(1, 3))
+            except Exception as e:
+                printf(Panel(f"[bold red]Reaction method failed: {str(e)}", 
+                    style="bold bright_black", width=60))
                 continue
         return False
 
@@ -133,7 +154,7 @@ class FacebookAutoReact:
             'type': reaction_type,
             'access_token': token
         }
-        response = self.session.post(url, params=params)
+        response = self.session.post(url, params=params, timeout=15)
         return response.ok
 
     def _react_method_2(self, token, post_details, reaction_type):
@@ -143,7 +164,7 @@ class FacebookAutoReact:
             'access_token': token,
             'method': 'post'
         }
-        response = self.session.post(url, data=data)
+        response = self.session.post(url, data=data, timeout=15)
         return response.ok
 
     def _react_method_3(self, token, post_details, reaction_type):
@@ -168,141 +189,252 @@ class FacebookAutoReact:
             }),
             'access_token': token
         }
-        response = self.session.post(url, data=data)
+        response = self.session.post(url, data=data, timeout=15)
         return response.ok
 
 def main():
     fb = FacebookAutoReact()
+    
     while True:
-        clear()
-        print("""
-\033[1;92m   █████╗ ██╗   ██╗████████╗ ██████╗     ██████╗ ███████╗ █████╗  ██████╗████████╗
-\033[1;92m  ██╔══██╗██║   ██║╚══██╔══╝██╔═══██╗    ██╔══██╗██╔════╝██╔══██╗██╔════╝╚══██╔══╝
-\033[1;92m  ███████║██║   ██║   ██║   ██║   ██║    ██████╔╝█████╗  ███████║██║        ██║   
-\033[1;92m  ██╔══██║██║   ██║   ██║   ██║   ██║    ██╔══██╗██╔══╝  ██╔══██║██║        ██║   
-\033[1;92m  ██║  ██║╚██████╔╝   ██║   ╚██████╔╝    ██║  ██║███████╗██║  ██║╚██████╗   ██║   
-\033[1;92m  ╚═╝  ╚═╝ ╚═════╝    ╚═╝    ╚═════╝     ╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝ ╚═════╝   ╚═╝   
-        """)
-        print("\033[1;92m═" * 75)
-        print("\033[1;97m[\033[1;92m+\033[1;97m] Auto React Tool")
-        print("\033[1;97m[\033[1;92m+\033[1;97m] Created By: Your Name")
-        print("\033[1;92m═" * 75)
-
-        print("\n\033[1;97m[\033[1;92m1\033[1;97m] Add New Token")
-        print("\033[1;97m[\033[1;92m2\033[1;97m] View Tokens")
-        print("\033[1;97m[\033[1;92m3\033[1;97m] Start Auto React")
-        print("\033[1;97m[\033[1;92m4\033[1;97m] Exit")
+        BANNER()
         
-        choice = input("\n\033[1;97m[\033[1;92m+\033[1;97m] Choose option: ").strip()
+        printf(
+            Panel(
+                f"""[bold white][[bold green]1[bold white]] Add New Token
+[bold white][[bold green]2[bold white]] View Tokens
+[bold white][[bold green]3[bold white]] Start Auto React
+[bold white][[bold green]4[bold white]] Exit Program""",
+                style="bold bright_black",
+                width=60,
+                title="[bold bright_black]>> [Menu] <<",
+                title_align="center",
+                subtitle="[bold bright_black]╭───────",
+                subtitle_align="left"
+            )
+        )
+        
+        choice = Console().input("[bold bright_black]   ╰─> ")
         
         if choice == '1':
-            token = input("\n\033[1;97m[\033[1;92m+\033[1;97m] Enter Token: ").strip()
+            printf(
+                Panel(f"[bold white]Enter your Facebook access token:", 
+                    style="bold bright_black", 
+                    width=60, 
+                    title="[bold bright_black]>> [Add Token] <<", 
+                    title_align="center",
+                    subtitle="[bold bright_black]╭───────",
+                    subtitle_align="left"
+                )
+            )
+            token = Console().input("[bold bright_black]   ╰─> ")
             check_result = fb.check_token(token)
             if check_result['valid']:
                 if fb.token_manager.save_token(token):
-                    print(f"\033[1;92m[✓] Token added - User: {check_result['name']}\033[0m")
+                    printf(Panel(f"[bold green]Token added successfully - User: {check_result['name']}", 
+                        style="bold bright_black", width=60))
                 else:
-                    print("\033[1;91m[!] Token already exists\033[0m")
+                    printf(Panel(f"[bold red]Token already exists", 
+                        style="bold bright_black", width=60))
             else:
-                print("\033[1;91m[!] Invalid token\033[0m")
+                printf(Panel(f"[bold red]Invalid token", 
+                    style="bold bright_black", width=60))
+            time.sleep(2)
 
         elif choice == '2':
             tokens = fb.token_manager.get_tokens()
             if tokens:
-                print("\n\033[1;97m[\033[1;92m+\033[1;97m] Saved Tokens:")
                 valid_tokens = []
+                printf(Panel("[bold white]Checking token validity...", 
+                    style="bold bright_black", width=60))
                 for i, token in enumerate(tokens, 1):
                     check_result = fb.check_token(token)
                     if check_result['valid']:
                         valid_tokens.append(token)
-                        print(f"\033[1;92m[{i}]\033[0m {token[:30]}... (Valid - {check_result['name']})")
+                        printf(Panel(f"[bold green]Token {i}: Valid - {check_result['name']}", 
+                            style="bold bright_black", width=60))
                     else:
-                        print(f"\033[1;91m[{i}]\033[0m {token[:30]}... (Invalid - Removed)")
+                        printf(Panel(f"[bold red]Token {i}: Invalid - Removed", 
+                            style="bold bright_black", width=60))
                         fb.token_manager.remove_token(token)
-                
-                print(f"\n\033[1;92m[✓] Valid tokens: {len(valid_tokens)}\033[0m")
+                    
+                printf(Panel(f"[bold white]Total valid tokens: [bold green]{len(valid_tokens)}", 
+                    style="bold bright_black", width=60))
             else:
-                print("\033[1;91m[!] No tokens saved\033[0m")
+                printf(Panel(f"[bold red]No tokens saved", 
+                    style="bold bright_black", width=60))
+            input("\nPress Enter to continue...")
 
         elif choice == '3':
             tokens = fb.token_manager.get_tokens()
             if not tokens:
-                print("\033[1;91m[!] No tokens saved. Add tokens first\033[0m")
+                printf(Panel(f"[bold red]No tokens available. Please add tokens first.", 
+                    style="bold bright_black", width=60))
                 time.sleep(2)
                 continue
 
-            url = input("\n\033[1;97m[\033[1;92m+\033[1;97m] Enter Post URL: ").strip()
+            printf(
+                Panel(f"[bold white]Enter the post URL to react to:", 
+                    style="bold bright_black", 
+                    width=60, 
+                    title="[bold bright_black]>> [Post URL] <<", 
+                    title_align="center",
+                    subtitle="[bold bright_black]╭───────",
+                    subtitle_align="left"
+                )
+            )
+            url = Console().input("[bold bright_black]   ╰─> ")
             post_details = fb.extract_post_details(url)
             
             if not post_details:
-                print("\033[1;91m[!] Invalid post URL\033[0m")
+                printf(Panel(f"[bold red]Invalid post URL", 
+                    style="bold bright_black", width=60))
                 time.sleep(2)
                 continue
 
-            print("\n\033[1;97m[\033[1;92m1\033[1;97m] LIKE")
-            print("\033[1;97m[\033[1;92m2\033[1;97m] LOVE")
-            print("\033[1;97m[\033[1;92m3\033[1;97m] HAHA")
-            print("\033[1;97m[\033[1;92m4\033[1;97m] WOW")
-            print("\033[1;97m[\033[1;92m5\033[1;97m] SAD")
-            print("\033[1;97m[\033[1;92m6\033[1;97m] ANGRY")
+            printf(
+                Panel(
+                    f"""[bold white]Available Reactions:
+[bold white][[bold green]1[bold white]] LIKE
+[bold white][[bold green]2[bold white]] LOVE
+[bold white][[bold green]3[bold white]] HAHA
+[bold white][[bold green]4[bold white]] WOW
+[bold white][[bold green]5[bold white]] SAD
+[bold white][[bold green]6[bold white]] ANGRY""",
+                    style="bold bright_black",
+                    width=60,
+                    title="[bold bright_black]>> [Choose Reaction] <<",
+                    title_align="center",
+                    subtitle="[bold bright_black]╭───────",
+                    subtitle_align="left"
+                )
+            )
             
             reaction_map = {
                 '1': 'LIKE', '2': 'LOVE', '3': 'HAHA',
                 '4': 'WOW', '5': 'SAD', '6': 'ANGRY'
             }
             
-            reaction_choice = input("\n\033[1;97m[\033[1;92m+\033[1;97m] Choose Reaction: ").strip()
+            reaction_choice = Console().input("[bold bright_black]   ╰─> ")
             if reaction_choice not in reaction_map:
-                print("\033[1;91m[!] Invalid choice\033[0m")
+                printf(Panel(f"[bold red]Invalid reaction choice", 
+                    style="bold bright_black", width=60))
                 time.sleep(2)
                 continue
 
-            print("\n\033[1;97m[\033[1;92m+\033[1;97m] Starting Auto React...")
+            printf(
+                Panel(f"[bold white]Enter delay between reactions (seconds):", 
+                    style="bold bright_black", 
+                    width=60, 
+                    title="[bold bright_black]>> [Delay] <<", 
+                    title_align="center",
+                    subtitle="[bold bright_black]╭───────",
+                    subtitle_align="left"
+                )
+            )
+            try:
+                delay = float(Console().input("[bold bright_black]   ╰─> "))
+            except:
+                printf(Panel(f"[bold red]Invalid delay value", 
+                    style="bold bright_black", width=60))
+                time.sleep(2)
+                continue
+
+            printf(Panel("[bold green]Starting Auto React...", 
+                style="bold bright_black", width=60))
+            
             success_count = [0]
             failed_count = [0]
             lock = threading.Lock()
 
             def worker(token, index):
                 try:
+                    time.sleep(delay * index)
                     result = fb.perform_reaction(token, post_details, reaction_map[reaction_choice])
                     with lock:
                         if result:
                             success_count[0] += 1
-                            print(f"\033[1;92m[{datetime.now().strftime('%H:%M:%S')}] Token {index + 1}: Reaction successful\033[0m")
+                            printf(Panel(f"[bold green]Token {index + 1}: Reaction successful", 
+                                style="bold bright_black", width=60))
                         else:
                             failed_count[0] += 1
-                            print(f"\033[1;91m[{datetime.now().strftime('%H:%M:%S')}] Token {index + 1}: Reaction failed - Removing token\033[0m")
+                            printf(Panel(f"[bold red]Token {index + 1}: Reaction failed", 
+                                style="bold bright_black", width=60))
                             fb.token_manager.remove_token(token)
                 except Exception as e:
                     with lock:
                         failed_count[0] += 1
-                        print(f"\033[1;91m[{datetime.now().strftime('%H:%M:%S')}] Token {index + 1}: Error - Removing token\033[0m")
+                        printf(Panel(f"[bold red]Token {index + 1}: Error - {str(e)}", 
+                            style="bold bright_black", width=60))
                         fb.token_manager.remove_token(token)
 
             threads = []
             for i, token in enumerate(tokens):
                 thread = threading.Thread(target=worker, args=(token, i))
                 threads.append(thread)
+                # Start all threads
+            for thread in threads:
                 thread.start()
-                time.sleep(1)  # Fixed 1-second delay
 
+            # Wait for all threads to complete
             for thread in threads:
                 thread.join()
 
-            print(f"\n\033[1;92m[✓] Reactions completed!")
-            print(f"[✓] Successful: {success_count[0]}")
-            print(f"\033[1;91m[!] Failed/Removed: {failed_count[0]}")
-            print(f"\033[1;97m[*] Remaining tokens: {len(fb.token_manager.get_tokens())}\033[0m")
+            printf(
+                Panel(
+                    f"""[bold white]Auto React Summary:
+[bold green]✓ Successful: {success_count[0]}
+[bold red]✗ Failed: {failed_count[0]}
+[bold white]≡ Remaining tokens: {len(fb.token_manager.get_tokens())}""",
+                    style="bold bright_black",
+                    width=60,
+                    title="[bold bright_black]>> [Complete] <<",
+                    title_align="center"
+                )
+            )
             input("\nPress Enter to continue...")
 
         elif choice == '4':
-            print("\n\033[1;97m[\033[1;92m+\033[1;97m] Thanks for using!")
+            printf(
+                Panel(f"[bold green]Thanks for using Facebook Auto React Tool!", 
+                    style="bold bright_black", 
+                    width=60, 
+                    title="[bold bright_black]>> [Goodbye] <<", 
+                    title_align="center"
+                )
+            )
             break
+
+        else:
+            printf(
+                Panel(f"[bold red]Invalid choice! Please try again.", 
+                    style="bold bright_black", 
+                    width=60, 
+                    title="[bold bright_black]>> [Error] <<", 
+                    title_align="center"
+                )
+            )
+            time.sleep(2)
 
 if __name__ == "__main__":
     try:
         main()
     except KeyboardInterrupt:
-        print("\n\033[1;91m[!] Program terminated by user\033[0m")
+        printf(
+            Panel(f"[bold yellow]Program terminated by user", 
+                style="bold bright_black", 
+                width=60, 
+                title="[bold bright_black]>> [Exit] <<", 
+                title_align="center"
+            )
+        )
+        sys.exit()
     except Exception as e:
-        print(f"\n\033[1;91m[!] Fatal error: {str(e)}\033[0m")
+        printf(
+            Panel(f"[bold red]Fatal error: {str(e)}", 
+                style="bold bright_black", 
+                width=60, 
+                title="[bold bright_black]>> [Error] <<", 
+                title_align="center"
+            )
+        )
+        sys.exit(1)
