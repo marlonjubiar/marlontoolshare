@@ -1,11 +1,36 @@
 #!/usr/bin/env python3
+import os
+import sys
+import time
+
+def install_packages():
+    required_packages = [
+        'requests',
+        'rich',
+        'pytz',
+        'pathlib'
+    ]
+    
+    print("\n[!] Checking and installing required packages...")
+    
+    for package in required_packages:
+        try:
+            __import__(package)
+        except ImportError:
+            print(f"[!] Installing {package}...")
+            os.system(f"pip install {package}")
+            print(f"[✓] {package} installed successfully!")
+    
+    print("[✓] All required packages installed!\n")
+    time.sleep(1)
+    os.system('clear' if os.name == 'posix' else 'cls')
+
+# Install required packages before importing
+if __name__ == "__main__":
+    install_packages()
+
 import threading
 import requests
-import sys
-import os
-import time
-import subprocess
-from typing import List, Optional, Dict
 import json
 from datetime import datetime, timedelta
 from rich.console import Console
@@ -16,6 +41,8 @@ import pytz
 from pathlib import Path
 import uuid
 import random
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import subprocess
 
 console = Console()
 os.system('clear' if os.name == 'posix' else 'cls')
@@ -51,6 +78,125 @@ def check_approval(key):
             return False
     except:
         return False
+
+#-----------------------------[COOKIE INFORMATION]-----------------------------------#
+def get_cookie_info(cookie):
+    try:
+        session = requests.Session()
+        headers = {
+            'cookie': cookie,
+            'user-agent': generate_user_agent()
+        }
+        session.headers.update(headers)
+        
+        response = session.get('https://www.facebook.com/me', allow_redirects=False)
+        if response.status_code == 302:
+            profile_url = response.headers.get('location')
+            user_id = profile_url.split('/')[-1] if profile_url else 'Unknown'
+            
+            response = session.get(f'https://www.facebook.com/{user_id}')
+            username = re.search(r'<title>(.*?)</title>', response.text)
+            username = username.group(1).replace(' | Facebook', '') if username else 'Unknown'
+            
+            return {
+                'uid': user_id,
+                'name': username,
+                'status': 'Active'
+            }
+    except:
+        return None
+
+def clean_cookies():
+    try:
+        valid_cookies = []
+        blocked_cookies = []
+        with open(COOKIE_PATH, 'r') as f:
+            cookies = [line.strip() for line in f if line.strip()]
+        
+        print(Panel("[white]Checking cookies status...", 
+            title="[bright_white]>> [Cookie Cleanup] <<",
+            width=65,
+            style="bold bright_white"
+        ))
+        
+        for cookie in cookies:
+            info = get_cookie_info(cookie)
+            if info:
+                valid_cookies.append(cookie)
+            else:
+                blocked_cookies.append(cookie)
+        
+        with open(COOKIE_PATH, 'w') as f:
+            for cookie in valid_cookies:
+                f.write(cookie + '\n')
+        
+        print(Panel(f"""[green]Cookie cleanup completed!
+[yellow]⚡[white] Total cookies: [cyan]{len(cookies)}
+[yellow]⚡[white] Valid: [green]{len(valid_cookies)}
+[yellow]⚡[white] Removed: [red]{len(blocked_cookies)}""",
+            title="[bright_white]>> [Cleanup Results] <<",
+            width=65,
+            style="bold bright_white"
+        ))
+        
+    except Exception as e:
+        print(Panel(f"[red]Error cleaning cookies: {str(e)}", 
+            title="[bright_white]>> [Error] <<",
+            width=65,
+            style="bold bright_white"
+        ))
+
+def view_cookie_info():
+    try:
+        if not os.path.exists(COOKIE_PATH):
+            print(Panel("[red]No cookies found!", 
+                title="[bright_white]>> [Error] <<",
+                width=65,
+                style="bold bright_white"
+            ))
+            return
+            
+        with open(COOKIE_PATH, 'r') as f:
+            cookies = [line.strip() for line in f if line.strip()]
+        
+        if not cookies:
+            print(Panel("[red]No cookies found in file!", 
+                title="[bright_white]>> [Error] <<",
+                width=65,
+                style="bold bright_white"
+            ))
+            return
+            
+        print(Panel("[white]Checking cookies info...", 
+            title="[bright_white]>> [Cookie Info] <<",
+            width=65,
+            style="bold bright_white"
+        ))
+        
+        cookie_info = []
+        for i, cookie in enumerate(cookies, 1):
+            info = get_cookie_info(cookie)
+            if info:
+                cookie_info.append(f"""[yellow]⚡[white] Cookie {i}:
+  [cyan]UID   :[white] {info['uid']}
+  [cyan]Name  :[white] {info['name']}
+  [cyan]Status:[green] {info['status']}""")
+            else:
+                cookie_info.append(f"""[yellow]⚡[white] Cookie {i}:
+  [red]Status: Invalid/Blocked""")
+        
+        print(Panel("\n".join(cookie_info), 
+            title="[bright_white]>> [Cookie Information] <<",
+            width=65,
+            style="bold bright_white"
+        ))
+        
+    except Exception as e:
+        print(Panel(f"[red]Error checking cookies: {str(e)}", 
+            title="[bright_white]>> [Error] <<",
+            width=65,
+            style="bold bright_white"
+        ))
 
 #-----------------------------[CREATE REQUIRED FILES]-----------------------------------#
 def create_required_files():
@@ -134,6 +280,28 @@ def get_cookie(uid, pww, ua=None):
     except:
         return None
 
+def process_account(account):
+    try:
+        if "e:" not in account or "p:" not in account:
+            return None
+            
+        email = account.split("e:")[1].split(" p:")[0].strip()
+        password = account.split("p:")[1].strip()
+        
+        print(f"[cyan]Trying[/cyan] {email}")
+        cookie = get_cookie(email, password)
+        
+        if cookie:
+            print(f"[green]Success[/green] {email}")
+            return cookie
+        else:
+            print(f"[red]Failed[/red] {email}")
+            return None
+            
+    except Exception as e:
+        print(f"[red]Error[/red] with account: {str(e)}")
+        return None
+
 def bulk_cookie_getter():
     try:
         banner()
@@ -171,32 +339,25 @@ def bulk_cookie_getter():
         
         success = 0
         failed = 0
+        valid_cookies = []
         
-        for account in accounts:
-            try:
-                if "e:" not in account or "p:" not in account:
-                    continue
-                    
-                email = account.split("e:")[1].split(" p:")[0].strip()
-                password = account.split("p:")[1].strip()
-                
-                print(f"[cyan]Trying[/cyan] {email}")
-                cookie = get_cookie(email, password)
-                
+        # Use ThreadPoolExecutor for parallel processing
+        with ThreadPoolExecutor(max_workers=25) as executor:  # Increased workers for faster processing
+            future_to_account = {executor.submit(process_account, account): account for account in accounts}
+            
+            for future in as_completed(future_to_account):
+                cookie = future.result()
                 if cookie:
-                    with open(COOKIE_PATH, "a") as f:
-                        f.write(cookie + "\n")
+                    valid_cookies.append(cookie)
                     success += 1
-                    print(f"[green]Success[/green] {email}")
                 else:
                     failed += 1
-                    print(f"[red]Failed[/red] {email}")
-                    
-                time.sleep(2)  # Delay between requests
-                
-            except Exception as e:
-                failed += 1
-                print(f"[red]Error[/red] with {email}: {str(e)}")
+        
+        # Write all successful cookies at once
+        if valid_cookies:
+            with open(COOKIE_PATH, "a") as f:
+                for cookie in valid_cookies:
+                    f.write(cookie + "\n")
                 
         print(Panel(f"""[yellow]⚡[white] Total Accounts: [cyan]{len(accounts)}
 [yellow]⚡[white] Success: [green]{success}
@@ -326,10 +487,25 @@ class FacebookShare:
             print(f"Error getting token for cookie {self.cookie_index + 1}: {str(e)}")
             return None
 
+    def remove_cookie(self):
+        try:
+            with open(COOKIE_PATH, 'r') as f:
+                cookies = f.readlines()
+            
+            with open(COOKIE_PATH, 'w') as f:
+                for cookie in cookies:
+                    if cookie.strip() != self.cookie:
+                        f.write(cookie)
+            
+            print(f"[red]Removed blocked/failed cookie {self.cookie_index + 1}")
+        except:
+            pass
+
     def share_post(self):
         token = self.get_token()
         if not token:
             self.stats.update_failed(self.cookie_index)
+            self.remove_cookie()
             return
 
         self.session.headers.update({
@@ -345,7 +521,7 @@ class FacebookShare:
                 )
                 data = response.json()
                 
-               if 'id' in data:
+                if 'id' in data:
                     count += 1
                     self.stats.update_success(self.cookie_index)
                     timestamp = datetime.now().strftime("%H:%M:%S")
@@ -353,11 +529,13 @@ class FacebookShare:
                 else:
                     print(f"Cookie {self.cookie_index + 1} is blocked or invalid!")
                     self.stats.update_failed(self.cookie_index)
+                    self.remove_cookie()
                     break
                     
             except Exception as e:
                 print(f"Error sharing post with cookie {self.cookie_index + 1}: {str(e)}")
                 self.stats.update_failed(self.cookie_index)
+                self.remove_cookie()
                 break
 
 class ShareStats:
@@ -407,22 +585,30 @@ def load_cookies():
 def show_main_menu():
     print(Panel("""[1] Start Share Process
 [2] Bulk Cookie Getter
-[3] Update Tool
-[4] Exit""",
+[3] View Cookie Info
+[4] Clean Cookies
+[5] Update Tool
+[6] Exit""",
         title="[bright_white]>> [Main Menu] <<",
         width=65,
         style="bold bright_white"
     ))
     
-    choice = console.input("[bright_white]Enter choice (1-4): ")
+    choice = console.input("[bright_white]Enter choice (1-6): ")
     
     if choice == "2":
         bulk_cookie_getter()
         return True
     elif choice == "3":
-        update_tool()
+        view_cookie_info()
         return True
     elif choice == "4":
+        clean_cookies()
+        return True
+    elif choice == "5":
+        update_tool()
+        return True
+    elif choice == "6":
         return False
     elif choice == "1":
         main()
