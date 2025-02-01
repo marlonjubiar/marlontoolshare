@@ -43,9 +43,12 @@ def get_key():
 def check_approval(key):
     try:
         resp = requests.get("https://pastebin.com/raw/3ntzWKg4").text
-        return key in resp
+        if key in resp:
+            return True
+        else:
+            return False
     except:
-        return True
+        return False
 
 def loading_animation(duration: int, message: str):
     frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
@@ -89,53 +92,9 @@ def update_tool():
         ))
         time.sleep(2)
 
-def get_system_info() -> Dict[str, str]:
-    try:
-        apis = [
-            'https://ipapi.co/json/',
-            'https://api.ipify.org?format=json',
-            'https://api.myip.com'
-        ]
-        
-        for api in apis:
-            try:
-                response = requests.get(api, timeout=3)
-                if response.status_code == 200:
-                    ip_info = response.json()
-                    break
-            except:
-                continue
-                
-        if 'ip' not in ip_info:
-            backup_response = requests.get('https://api64.ipify.org?format=json', timeout=3)
-            ip_info = backup_response.json()
-            
-            location_response = requests.get(f'https://ipapi.co/{ip_info["ip"]}/json/', timeout=3)
-            location_info = location_response.json()
-            ip_info.update(location_info)
-        
-        ph_tz = pytz.timezone('Asia/Manila')
-        ph_time = datetime.now(ph_tz)
-        
-        return {
-            'ip': ip_info.get('ip', 'Checking...'),
-            'region': ip_info.get('region', 'Checking...'),
-            'city': ip_info.get('city', 'Checking...'),
-            'time': ph_time.strftime("%I:%M:%S %p"),
-            'date': ph_time.strftime("%B %d, %Y")
-        }
-    except:
-        return {
-            'ip': 'Checking...',
-            'region': 'Checking...',
-            'city': 'Checking...',
-            'time': datetime.now().strftime("%I:%M:%S %p"),
-            'date': datetime.now().strftime("%B %d, %Y")
-        }
-
 def banner():
     os.system('clear' if os.name == 'posix' else 'cls')
-    sys_info = get_system_info()
+    key = get_key()
     
     print(Panel(
         r"""[red]●[yellow] ●[green] ●
@@ -154,19 +113,18 @@ def banner():
         f"""[yellow]⚡[cyan] Tool     : [green]SpamShare[/]
 [yellow]⚡[cyan] Version  : [green]1.0.0[/]
 [yellow]⚡[cyan] Dev      : [green]Ryo Evisu[/]
-[yellow]⚡[cyan] Status   : [red]Cookie Mode[/]""",
+[yellow]⚡[cyan] Status   : [red]Premium[/]""",
         title="[white on red] INFORMATION [/]",
         width=65,
         style="bold bright_white",
     ))
     
     print(Panel(
-        f"""[yellow]⚡[cyan] IP       : [cyan]{sys_info['ip']}[/]
-[yellow]⚡[cyan] Region   : [cyan]{sys_info['region']}[/]
-[yellow]⚡[cyan] City     : [cyan]{sys_info['city']}[/]
-[yellow]⚡[cyan] Time     : [cyan]{sys_info['time']}[/]
-[yellow]⚡[cyan] Date     : [cyan]{sys_info['date']}[/]""",
-        title="[white on red] SYSTEM INFO [/]",
+        f"""[yellow]⚡[cyan] Key      : [cyan]{key}[/]
+[yellow]⚡[cyan] Premium  : [green]True[/]
+[yellow]⚡[cyan] Expired  : [red]Never[/]
+[yellow]⚡[cyan] Version  : [green]Latest[/]""",
+        title="[white on red] KEY INFO [/]",
         width=65,
         style="bold bright_white",
     ))
