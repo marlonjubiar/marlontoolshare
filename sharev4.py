@@ -48,8 +48,8 @@ console = Console()
 os.system('clear' if os.name == 'posix' else 'cls')
 
 # File paths
-COOKIE_PATH = 'cookie.txt'
-ACCOUNTS_PATH = 'accounts.txt'
+COOKIE_PATH = '/storage/emulated/0/cookie.txt'
+ACCOUNTS_PATH = '/storage/emulated/0/accounts.txt'
 
 config = {
     'post': '',
@@ -79,7 +79,7 @@ def check_approval(key):
     except:
         return False
 
-#-----------------------------[COOKIE INFORMATION]-----------------------------------#
+#-----------------------------[COOKIE CHECKER]-----------------------------------#
 def get_cookie_info(cookie):
     try:
         session = requests.Session()
@@ -106,101 +106,58 @@ def get_cookie_info(cookie):
     except:
         return None
 
-def clean_cookies():
+def check_and_clean_cookies():
     try:
-        valid_cookies = []
-        blocked_cookies = []
-        with open(COOKIE_PATH, 'r') as f:
-            cookies = [line.strip() for line in f if line.strip()]
-        
-        print(Panel("[white]Checking cookies status...", 
-            title="[bright_white]>> [Cookie Cleanup] <<",
-            width=65,
-            style="bold bright_white"
-        ))
-        
-        for cookie in cookies:
-            info = get_cookie_info(cookie)
-            if info:
-                valid_cookies.append(cookie)
-            else:
-                blocked_cookies.append(cookie)
-        
-        with open(COOKIE_PATH, 'w') as f:
-            for cookie in valid_cookies:
-                f.write(cookie + '\n')
-        
-        print(Panel(f"""[green]Cookie cleanup completed!
-[yellow]⚡[white] Total cookies: [cyan]{len(cookies)}
-[yellow]⚡[white] Valid: [green]{len(valid_cookies)}
-[yellow]⚡[white] Removed: [red]{len(blocked_cookies)}""",
-            title="[bright_white]>> [Cleanup Results] <<",
-            width=65,
-            style="bold bright_white"
-        ))
-        
-    except Exception as e:
-        print(Panel(f"[red]Error cleaning cookies: {str(e)}", 
-            title="[bright_white]>> [Error] <<",
-            width=65,
-            style="bold bright_white"
-        ))
+        if os.path.exists(COOKIE_PATH):
+            with open(COOKIE_PATH, 'r') as f:
+                cookies = [line.strip() for line in f if line.strip()]
+            
+            valid_cookies = []
+            dead_cookies = []
+            
+            for cookie in cookies:
+                if get_cookie_info(cookie):
+                    valid_cookies.append(cookie)
+                else:
+                    dead_cookies.append(cookie)
+            
+            if dead_cookies:
+                print(Panel(f"""[yellow]⚡[white] Dead cookies detected!
+[yellow]⚡[white] Valid cookies: [green]{len(valid_cookies)}
+[yellow]⚡[white] Dead cookies: [red]{len(dead_cookies)}
 
-def view_cookie_info():
-    try:
-        if not os.path.exists(COOKIE_PATH):
-            print(Panel("[red]No cookies found!", 
-                title="[bright_white]>> [Error] <<",
-                width=65,
-                style="bold bright_white"
-            ))
-            return
-            
-        with open(COOKIE_PATH, 'r') as f:
-            cookies = [line.strip() for line in f if line.strip()]
-        
-        if not cookies:
-            print(Panel("[red]No cookies found in file!", 
-                title="[bright_white]>> [Error] <<",
-                width=65,
-                style="bold bright_white"
-            ))
-            return
-            
-        print(Panel("[white]Checking cookies info...", 
-            title="[bright_white]>> [Cookie Info] <<",
-            width=65,
-            style="bold bright_white"
-        ))
-        
-        cookie_info = []
-        for i, cookie in enumerate(cookies, 1):
-            info = get_cookie_info(cookie)
-            if info:
-                cookie_info.append(f"""[yellow]⚡[white] Cookie {i}:
-  [cyan]UID   :[white] {info['uid']}
-  [cyan]Name  :[white] {info['name']}
-  [cyan]Status:[green] {info['status']}""")
-            else:
-                cookie_info.append(f"""[yellow]⚡[white] Cookie {i}:
-  [red]Status: Invalid/Blocked""")
-        
-        print(Panel("\n".join(cookie_info), 
-            title="[bright_white]>> [Cookie Information] <<",
-            width=65,
-            style="bold bright_white"
-        ))
-        
+[white]Remove dead cookies? (y/n)""",
+                    title="[bright_white]>> [Cookie Cleanup] <<",
+                    width=65,
+                    style="bold bright_white",
+                    subtitle="╭─────",
+                    subtitle_align="left"
+                ))
+                
+                choice = console.input("[bright_white]   ╰─> ")
+                if choice.lower() == 'y':
+                    with open(COOKIE_PATH, 'w') as f:
+                        for cookie in valid_cookies:
+                            f.write(cookie + '\n')
+                    print(Panel("[green]Dead cookies removed successfully!", 
+                        title="[bright_white]>> [Success] <<",
+                        width=65,
+                        style="bold bright_white"
+                    ))
+                    time.sleep(2)
+                    return True
     except Exception as e:
         print(Panel(f"[red]Error checking cookies: {str(e)}", 
             title="[bright_white]>> [Error] <<",
             width=65,
             style="bold bright_white"
         ))
+    return False
 
 #-----------------------------[CREATE REQUIRED FILES]-----------------------------------#
 def create_required_files():
     # Create cookie.txt if not exists
+    os.makedirs(os.path.dirname(COOKIE_PATH), exist_ok=True)
     if not os.path.exists(COOKIE_PATH):
         with open(COOKIE_PATH, 'w') as f:
             f.write("")
@@ -362,7 +319,7 @@ def bulk_cookie_getter():
         print(Panel(f"""[yellow]⚡[white] Total Accounts: [cyan]{len(accounts)}
 [yellow]⚡[white] Success: [green]{success}
 [yellow]⚡[white] Failed: [red]{failed}
-[yellow]⚡[white] Cookies saved to: [cyan]cookie.txt""",
+[yellow]⚡[white] Cookies saved to: [cyan]{COOKIE_PATH}""",
             title="[bright_white]>> [Results] <<",
             width=65,
             style="bold bright_white"
@@ -420,6 +377,20 @@ def update_tool():
 def banner():
     os.system('clear' if os.name == 'posix' else 'cls')
     key = get_key()
+    cookie_count = 0
+    active_cookies = 0
+    
+    try:
+        if os.path.exists(COOKIE_PATH):
+            with open(COOKIE_PATH, 'r') as f:
+                cookies = [line.strip() for line in f if line.strip()]
+                cookie_count = len(cookies)
+                
+                for cookie in cookies:
+                    if get_cookie_info(cookie):
+                        active_cookies += 1
+    except:
+        pass
     
     print(Panel(
         r"""[red]●[yellow] ●[green] ●
@@ -453,6 +424,45 @@ def banner():
         width=65,
         style="bold bright_white",
     ))
+
+    print(Panel(
+        f"""[yellow]⚡[cyan] Total Cookies : [green]{cookie_count}[/]
+[yellow]⚡[cyan] Active Cookies: [green]{active_cookies}[/]
+[yellow]⚡[cyan] Dead Cookies  : [red]{cookie_count - active_cookies}[/]
+[yellow]⚡[cyan] Cookie Path   : [cyan]{COOKIE_PATH}[/]""",
+        title="[white on red] COOKIE INFO [/]",
+        width=65,
+        style="bold bright_white",
+    ))
+    
+    # Check for dead cookies and prompt for cleanup
+    if cookie_count > 0 and active_cookies < cookie_count:
+        check_and_clean_cookies()
+
+def show_main_menu():
+    print(Panel("""[1] Start Share Process
+[2] Bulk Cookie Getter
+[3] Update Tool
+[4] Exit""",
+        title="[bright_white]>> [Main Menu] <<",
+        width=65,
+        style="bold bright_white"
+    ))
+    
+    choice = console.input("[bright_white]Enter choice (1-4): ")
+    
+    if choice == "2":
+        bulk_cookie_getter()
+        return True
+    elif choice == "3":
+        update_tool()
+        return True
+    elif choice == "4":
+        return False
+    elif choice == "1":
+        main()
+        return True
+    return True
 
 class FacebookShare:
     def __init__(self, cookie, post_link, share_count, cookie_index, stats):
@@ -562,9 +572,10 @@ class ShareStats:
 def load_cookies():
     try:
         if not os.path.exists(COOKIE_PATH):
+            os.makedirs(os.path.dirname(COOKIE_PATH), exist_ok=True)
             with open(COOKIE_PATH, 'w') as f:
                 f.write("")
-            console.print(f"[green]Created empty cookie.txt file")
+            console.print(f"[green]Created empty cookie file at {COOKIE_PATH}")
             console.print("[yellow]Please add your cookies to the file and run the script again")
             return None
             
@@ -581,39 +592,6 @@ def load_cookies():
     except Exception as e:
         console.print(f"[red]Error loading cookies: {str(e)}")
         return None
-
-def show_main_menu():
-    print(Panel("""[1] Start Share Process
-[2] Bulk Cookie Getter
-[3] View Cookie Info
-[4] Clean Cookies
-[5] Update Tool
-[6] Exit""",
-        title="[bright_white]>> [Main Menu] <<",
-        width=65,
-        style="bold bright_white"
-    ))
-    
-    choice = console.input("[bright_white]Enter choice (1-6): ")
-    
-    if choice == "2":
-        bulk_cookie_getter()
-        return True
-    elif choice == "3":
-        view_cookie_info()
-        return True
-    elif choice == "4":
-        clean_cookies()
-        return True
-    elif choice == "5":
-        update_tool()
-        return True
-    elif choice == "6":
-        return False
-    elif choice == "1":
-        main()
-        return True
-    return True
 
 def main():
     try:
