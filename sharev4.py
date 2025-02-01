@@ -2,33 +2,6 @@
 import os
 import sys
 import time
-
-def install_packages():
-    required_packages = [
-        'requests',
-        'rich',
-        'pytz',
-        'pathlib'
-    ]
-    
-    print("\n[!] Checking and installing required packages...")
-    
-    for package in required_packages:
-        try:
-            __import__(package)
-        except ImportError:
-            print(f"[!] Installing {package}...")
-            os.system(f"pip install {package}")
-            print(f"[✓] {package} installed successfully!")
-    
-    print("[✓] All required packages installed!\n")
-    time.sleep(1)
-    os.system('clear' if os.name == 'posix' else 'cls')
-
-# Install required packages before importing
-if __name__ == "__main__":
-    install_packages()
-
 import threading
 import requests
 import json
@@ -44,10 +17,26 @@ import random
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import subprocess
 
+def install_packages():
+    required_packages = ['requests', 'rich', 'pytz', 'pathlib']
+    print("\n[!] Checking and installing required packages...")
+    for package in required_packages:
+        try:
+            __import__(package)
+        except ImportError:
+            print(f"[!] Installing {package}...")
+            os.system(f"pip install {package}")
+            print(f"[✓] {package} installed successfully!")
+    print("[✓] All required packages installed!\n")
+    time.sleep(1)
+    os.system('clear' if os.name == 'posix' else 'cls')
+
+if __name__ == "__main__":
+    install_packages()
+
 console = Console()
 os.system('clear' if os.name == 'posix' else 'cls')
 
-# File paths
 COOKIE_PATH = '/storage/emulated/0/cookie.txt'
 ACCOUNTS_PATH = '/storage/emulated/0/accounts.txt'
 
@@ -58,7 +47,6 @@ config = {
     'target_shares': 0
 }
 
-#-----------------------------[APPROVAL KEY]-----------------------------------#
 def get_key():
     a = str(os.geteuid())
     b = str(os.geteuid())
@@ -79,7 +67,6 @@ def check_approval(key):
     except:
         return False
 
-#-----------------------------[COOKIE CHECKER]-----------------------------------#
 def get_cookie_info(cookie):
     try:
         session = requests.Session()
@@ -89,22 +76,17 @@ def get_cookie_info(cookie):
         }
         session.headers.update(headers)
         
-        response = session.get('https://www.facebook.com/me', allow_redirects=False)
-        if response.status_code == 302:
-            profile_url = response.headers.get('location')
-            user_id = profile_url.split('/')[-1] if profile_url else 'Unknown'
-            
-            response = session.get(f'https://www.facebook.com/{user_id}')
-            username = re.search(r'<title>(.*?)</title>', response.text)
-            username = username.group(1).replace(' | Facebook', '') if username else 'Unknown'
-            
-            return {
-                'uid': user_id,
-                'name': username,
-                'status': 'Active'
-            }
+        response = session.post(
+            'https://business.facebook.com/business_locations',
+            headers=headers,
+            timeout=10
+        )
+        
+        if 'content-manager' in response.text or 'Business Suite' in response.text:
+            return True  # Cookie is valid
+        return False
     except:
-        return None
+        return True  # Consider valid if check fails to avoid false positives
 
 def check_and_clean_cookies():
     try:
@@ -115,11 +97,14 @@ def check_and_clean_cookies():
             valid_cookies = []
             dead_cookies = []
             
-            for cookie in cookies:
-                if get_cookie_info(cookie):
-                    valid_cookies.append(cookie)
-                else:
-                    dead_cookies.append(cookie)
+            with ThreadPoolExecutor(max_workers=10) as executor:
+                future_to_cookie = {executor.submit(get_cookie_info, cookie): cookie for cookie in cookies}
+                for future in as_completed(future_to_cookie):
+                    cookie = future_to_cookie[future]
+                    if future.result():
+                        valid_cookies.append(cookie)
+                    else:
+                        dead_cookies.append(cookie)
             
             if dead_cookies:
                 print(Panel(f"""[yellow]⚡[white] Dead cookies detected!
@@ -154,22 +139,20 @@ def check_and_clean_cookies():
         ))
     return False
 
-#-----------------------------[CREATE REQUIRED FILES]-----------------------------------#
 def create_required_files():
-    # Create cookie.txt if not exists
     os.makedirs(os.path.dirname(COOKIE_PATH), exist_ok=True)
+    os.makedirs(os.path.dirname(ACCOUNTS_PATH), exist_ok=True)
+    
     if not os.path.exists(COOKIE_PATH):
         with open(COOKIE_PATH, 'w') as f:
             f.write("")
             
-    # Create accounts.txt with example if not exists
     if not os.path.exists(ACCOUNTS_PATH):
         with open(ACCOUNTS_PATH, 'w') as f:
             f.write("# Format your accounts like this:\n")
             f.write("e:example123@gmail.com p:12345\n")
             f.write("e:another@gmail.com p:password123\n")
 
-#-----------------------------[COOKIE GETTER]-----------------------------------#
 def generate_user_agent():
     amazon = ["E6653", "E6633", "E6853", "E6833", "F3111", "F3111 F3113", "F5122", 
               "F3111 F3113", "SO-04H", "F3212", "F3311", "F8331", "SO-02J", "G3116", "G8232"]
@@ -319,7 +302,7 @@ def bulk_cookie_getter():
         print(Panel(f"""[yellow]⚡[white] Total Accounts: [cyan]{len(accounts)}
 [yellow]⚡[white] Success: [green]{success}
 [yellow]⚡[white] Failed: [red]{failed}
-[yellow]⚡[white] Cookies saved to: [cyan]{COOKIE_PATH}""",
+[yellow]⚡[white] Cookies saved to: [cyan]cookie.txt""",
             title="[bright_white]>> [Results] <<",
             width=65,
             style="bold bright_white"
@@ -331,48 +314,6 @@ def bulk_cookie_getter():
             width=65,
             style="bold bright_white"
         ))
-
-def loading_animation(duration: int, message: str):
-    frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
-    end_time = time.time() + duration
-    i = 0
-    while time.time() < end_time:
-        print(f"\r{frames[i]} {message}", end="")
-        time.sleep(0.1)
-        i = (i + 1) % len(frames)
-    print("\r" + " " * (len(message) + 2))
-
-def update_tool():
-    try:
-        print(Panel("[white]Checking for updates...", 
-            title="[bright_white]>> [Update Check] <<",
-            width=65,
-            style="bold bright_white"
-        ))
-        
-        result = subprocess.run(['git', 'pull'], capture_output=True, text=True)
-        
-        if "Already up to date" in result.stdout:
-            print(Panel("[green]Tool is already up to date!", 
-                title="[bright_white]>> [Update Status] <<",
-                width=65,
-                style="bold bright_white"
-            ))
-            time.sleep(2)
-        else:
-            print(Panel("[green]Tool updated successfully!\n[yellow]Please restart the script.", 
-                title="[bright_white]>> [Update Status] <<",
-                width=65,
-                style="bold bright_white"
-            ))
-            sys.exit(0)
-    except Exception as e:
-        print(Panel(f"[red]Update failed: {str(e)}", 
-            title="[bright_white]>> [Error] <<",
-            width=65,
-            style="bold bright_white"
-        ))
-        time.sleep(2)
 
 def banner():
     os.system('clear' if os.name == 'posix' else 'cls')
@@ -386,9 +327,10 @@ def banner():
                 cookies = [line.strip() for line in f if line.strip()]
                 cookie_count = len(cookies)
                 
-                for cookie in cookies:
-                    if get_cookie_info(cookie):
-                        active_cookies += 1
+            if cookie_count > 0:
+                with ThreadPoolExecutor(max_workers=10) as executor:
+                    futures = [executor.submit(get_cookie_info, cookie) for cookie in cookies]
+                    active_cookies = sum(1 for future in as_completed(futures) if future.result())
     except:
         pass
     
@@ -473,7 +415,7 @@ class FacebookShare:
         self.stats = stats
         self.session = requests.Session()
         self.headers = {
-            'user-agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Mobile Safari/537.36',
+            'user-agent': generate_user_agent(),
             'sec-ch-ua': '"Google Chrome";v="107", "Chromium";v="107", "Not=A?Brand";v="24"',
             'sec-ch-ua-mobile': '?1',
             'sec-ch-ua-platform': "Android",
@@ -488,7 +430,7 @@ class FacebookShare:
 
     def get_token(self):
         try:
-            response = self.session.get('https://business.facebook.com/content_management')
+            response = self.session.get('https://business.facebook.com/content_management', timeout=15)
             token_match = re.search('EAAG(.*?)","', response.text)
             if token_match:
                 return 'EAAG' + token_match.group(1)
@@ -523,30 +465,36 @@ class FacebookShare:
             'host': 'b-graph.facebook.com'
         })
 
-        count = 0
-        while count < self.share_count:
-            try:
-                response = self.session.post(
-                    f'https://b-graph.facebook.com/me/feed?link=https://mbasic.facebook.com/{self.post_link}&published=0&access_token={token}'
-                )
-                data = response.json()
-                
-                if 'id' in data:
-                    count += 1
-                    self.stats.update_success(self.cookie_index)
-                    timestamp = datetime.now().strftime("%H:%M:%S")
-                    print(f"[cyan][{timestamp}][/cyan][green] Share {count}/{self.share_count} completed for Cookie {self.cookie_index + 1}")
-                else:
-                    print(f"Cookie {self.cookie_index + 1} is blocked or invalid!")
-                    self.stats.update_failed(self.cookie_index)
+        def share_batch(start, end):
+            for i in range(start, end):
+                try:
+                    response = self.session.post(
+                        f'https://b-graph.facebook.com/me/feed?link=https://mbasic.facebook.com/{self.post_link}&published=0&access_token={token}',
+                        timeout=5
+                    )
+                    data = response.json()
+                    
+                    if 'id' in data:
+                        self.stats.update_success(self.cookie_index)
+                        print(f"[cyan][{datetime.now().strftime('%H:%M:%S')}][/cyan][green] Share {i+1}/{self.share_count} completed for Cookie {self.cookie_index + 1}")
+                    else:
+                        return False
+                except:
+                    continue
+            return True
+
+        # Split shares into batches and process in parallel
+        batch_size = 10
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            futures = []
+            for i in range(0, self.share_count, batch_size):
+                end = min(i + batch_size, self.share_count)
+                futures.append(executor.submit(share_batch, i, end))
+
+            for future in as_completed(futures):
+                if not future.result():
                     self.remove_cookie()
                     break
-                    
-            except Exception as e:
-                print(f"Error sharing post with cookie {self.cookie_index + 1}: {str(e)}")
-                self.stats.update_failed(self.cookie_index)
-                self.remove_cookie()
-                break
 
 class ShareStats:
     def __init__(self):
@@ -592,6 +540,38 @@ def load_cookies():
     except Exception as e:
         console.print(f"[red]Error loading cookies: {str(e)}")
         return None
+
+def update_tool():
+    try:
+        print(Panel("[white]Checking for updates...", 
+            title="[bright_white]>> [Update Check] <<",
+            width=65,
+            style="bold bright_white"
+        ))
+        
+        result = subprocess.run(['git', 'pull'], capture_output=True, text=True)
+        
+        if "Already up to date" in result.stdout:
+            print(Panel("[green]Tool is already up to date!", 
+                title="[bright_white]>> [Update Status] <<",
+                width=65,
+                style="bold bright_white"
+            ))
+            time.sleep(2)
+        else:
+            print(Panel("[green]Tool updated successfully!\n[yellow]Please restart the script.", 
+                title="[bright_white]>> [Update Status] <<",
+                width=65,
+                style="bold bright_white"
+            ))
+            sys.exit(0)
+    except Exception as e:
+        print(Panel(f"[red]Update failed: {str(e)}", 
+            title="[bright_white]>> [Error] <<",
+            width=65,
+            style="bold bright_white"
+        ))
+        time.sleep(2)
 
 def main():
     try:
