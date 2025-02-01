@@ -47,6 +47,53 @@ config = {
     'target_shares': 0
 }
 
+def loading_animation(duration: int, message: str):
+    frames = ["⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷"]
+    colors = ["cyan", "green", "yellow", "blue", "magenta", "red"]
+    start_time = time.time()
+    i = 0
+    
+    try:
+        while time.time() - start_time < duration:
+            current_time = time.strftime("%H:%M:%S", time.localtime())
+            color = colors[i % len(colors)]
+            print(f"\r[{current_time}] [{color}]{frames[i]}[/] {message}", end="", flush=True)
+            time.sleep(0.1)
+            i = (i + 1) % len(frames)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        print("\r" + " " * (len(message) + 30), end="\r")
+
+def process_cookies():
+    try:
+        dots = [".", "..", "..."]
+        colors = ["cyan", "green", "yellow"]
+        for _ in range(3):
+            for i, dot in enumerate(dots):
+                print(f"\r[{colors[i % len(colors)]}]Processing cookies{dot}[/]", end="", flush=True)
+                time.sleep(0.3)
+        print("\r" + " " * 50, end="\r")
+    except KeyboardInterrupt:
+        pass
+
+def process_animation(message: str, duration: int = 3):
+    try:
+        chars = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+        colors = ["cyan", "green", "yellow", "blue", "magenta"]
+        start_time = time.time()
+        i = 0
+        
+        while time.time() - start_time < duration:
+            color = colors[i % len(colors)]
+            print(f"\r[{color}]{chars[i % len(chars)]}[/] {message}", end="", flush=True)
+            time.sleep(0.1)
+            i += 1
+    except KeyboardInterrupt:
+        pass
+    finally:
+        print("\r" + " " * (len(message) + 20), end="\r")
+
 def get_key():
     a = str(os.geteuid())
     b = str(os.geteuid())
@@ -83,10 +130,10 @@ def get_cookie_info(cookie):
         )
         
         if 'content-manager' in response.text or 'Business Suite' in response.text:
-            return True  # Cookie is valid
+            return True
         return False
     except:
-        return True  # Consider valid if check fails to avoid false positives
+        return True
 
 def check_and_clean_cookies():
     try:
@@ -281,8 +328,7 @@ def bulk_cookie_getter():
         failed = 0
         valid_cookies = []
         
-        # Use ThreadPoolExecutor for parallel processing
-        with ThreadPoolExecutor(max_workers=25) as executor:  # Increased workers for faster processing
+        with ThreadPoolExecutor(max_workers=25) as executor:
             future_to_account = {executor.submit(process_account, account): account for account in accounts}
             
             for future in as_completed(future_to_account):
@@ -293,7 +339,6 @@ def bulk_cookie_getter():
                 else:
                     failed += 1
         
-        # Write all successful cookies at once
         if valid_cookies:
             with open(COOKIE_PATH, "a") as f:
                 for cookie in valid_cookies:
@@ -302,7 +347,7 @@ def bulk_cookie_getter():
         print(Panel(f"""[yellow]⚡[white] Total Accounts: [cyan]{len(accounts)}
 [yellow]⚡[white] Success: [green]{success}
 [yellow]⚡[white] Failed: [red]{failed}
-[yellow]⚡[white] Cookies saved to: [cyan]cookie.txt""",
+[yellow]⚡[white] Cookies saved to: [cyan]{COOKIE_PATH}""",
             title="[bright_white]>> [Results] <<",
             width=65,
             style="bold bright_white"
@@ -327,6 +372,7 @@ def banner():
                 cookies = [line.strip() for line in f if line.strip()]
                 cookie_count = len(cookies)
                 
+            # Only check if there are cookies
             if cookie_count > 0:
                 with ThreadPoolExecutor(max_workers=10) as executor:
                     futures = [executor.submit(get_cookie_info, cookie) for cookie in cookies]
@@ -377,7 +423,6 @@ def banner():
         style="bold bright_white",
     ))
     
-    # Check for dead cookies and prompt for cleanup
     if cookie_count > 0 and active_cookies < cookie_count:
         check_and_clean_cookies()
 
@@ -476,14 +521,14 @@ class FacebookShare:
                     
                     if 'id' in data:
                         self.stats.update_success(self.cookie_index)
-                        print(f"[cyan][{datetime.now().strftime('%H:%M:%S')}][/cyan][green] Share {i+1}/{self.share_count} completed for Cookie {self.cookie_index + 1}")
+                        timestamp = datetime.now().strftime("%H:%M:%S")
+                        print(f"[cyan][{timestamp}][/cyan][green] Share {i+1}/{self.share_count} completed for Cookie {self.cookie_index + 1}")
                     else:
                         return False
                 except:
                     continue
             return True
 
-        # Split shares into batches and process in parallel
         batch_size = 10
         with ThreadPoolExecutor(max_workers=10) as executor:
             futures = []
@@ -586,9 +631,13 @@ def main():
             width=65,
             style="bold bright_white"
         ))
-        loading_animation(2, "Processing cookies...")
+        
+        process_cookies()  # Add fancy loading animation
+        loading_animation(3, "Validating cookies...")  # Add second loading animation
+        
         print(Panel(f"""[green]Cookies loaded successfully!
-[yellow]⚡[white] Total cookies: [cyan]{len(config['cookies'])}""",
+[yellow]⚡[white] Total cookies: [cyan]{len(config['cookies'])}
+[yellow]⚡[white] Working path: [cyan]{COOKIE_PATH}""",
             title="[bright_white]>> [Success] <<",
             width=65,
             style="bold bright_white"
