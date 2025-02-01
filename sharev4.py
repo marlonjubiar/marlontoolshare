@@ -15,12 +15,14 @@ import re
 import pytz
 from pathlib import Path
 import uuid
+import random
 
 console = Console()
 os.system('clear' if os.name == 'posix' else 'cls')
 
 # File paths
-COOKIE_PATH = '/storage/emulated/0/a/cookie.txt'
+COOKIE_PATH = 'cookie.txt'
+ACCOUNTS_PATH = 'accounts.txt'
 
 config = {
     'post': '',
@@ -49,6 +51,168 @@ def check_approval(key):
             return False
     except:
         return False
+
+#-----------------------------[CREATE REQUIRED FILES]-----------------------------------#
+def create_required_files():
+    # Create cookie.txt if not exists
+    if not os.path.exists(COOKIE_PATH):
+        with open(COOKIE_PATH, 'w') as f:
+            f.write("")
+            
+    # Create accounts.txt with example if not exists
+    if not os.path.exists(ACCOUNTS_PATH):
+        with open(ACCOUNTS_PATH, 'w') as f:
+            f.write("# Format your accounts like this:\n")
+            f.write("e:example123@gmail.com p:12345\n")
+            f.write("e:another@gmail.com p:password123\n")
+
+#-----------------------------[COOKIE GETTER]-----------------------------------#
+def generate_user_agent():
+    amazon = ["E6653", "E6633", "E6853", "E6833", "F3111", "F3111 F3113", "F5122", 
+              "F3111 F3113", "SO-04H", "F3212", "F3311", "F8331", "SO-02J", "G3116", "G8232"]
+    
+    return f"Mozilla/5.0 (Linux; Android {random.randint(4,13)}; {random.choice(amazon)}; Windows 10 Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Kiwi Chrome/{random.randint(84,106)}.0.{random.randint(4200,4900)}.{random.randint(40,140)} Mobile Safari/537.36"
+
+def get_lsd_token(session):
+    try:
+        git_fb = session.get("https://touch.facebook.com/pages/create/?ref_type=registration_form", timeout=30).text
+        return re.search(r'"lsd":"(.*?)"', str(git_fb)).group(1)
+    except Exception as e:
+        return None
+
+def get_cookie(uid, pww, ua=None):
+    try:
+        if not ua:
+            ua = generate_user_agent()
+        
+        session = requests.Session()
+        lsd = get_lsd_token(session)
+        
+        if not lsd:
+            return None
+            
+        _data = {
+            'lsd': lsd,
+            'email': uid,
+            'encpass': '#PWD_BROWSER:0:' + str(int(time.time())) + ':' + pww
+        }
+        
+        _header = {
+            'authority': 'touch.facebook.com',
+            'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+            'accept-language': 'en-GB,en-US;q=0.9,en;q=0.8',
+            'cache-control': 'max-age=0',
+            'content-type': 'application/x-www-form-urlencoded',
+            'dpr': '1.8937500715255737',
+            'origin': 'https://touch.facebook.com',
+            'referer': 'https://touch.facebook.com/',
+            'sec-ch-prefers-color-scheme': 'dark',
+            'sec-ch-ua': '"Not-A.Brand";v="99", "Chromium";v="124"',
+            'sec-ch-ua-full-version-list': '"Not-A.Brand";v="99.0.0.0", "Chromium";v="124.0.6327.4"',
+            'sec-ch-ua-mobile': '?1',
+            'sec-ch-ua-model': '""',
+            'sec-ch-ua-platform': '"Android"',
+            'sec-ch-ua-platform-version': '""',
+            'sec-fetch-dest': 'document',
+            'sec-fetch-mode': 'navigate',
+            'sec-fetch-site': 'same-origin',
+            'sec-fetch-user': '?1',
+            'upgrade-insecure-requests': '1',
+            'user-agent': ua,
+            'viewport-width': '980'
+        }
+        
+        url = 'https://touch.facebook.com/login/device-based/regular/login/?login_attempt=1&lwv=110'
+        response = session.post(url, data=_data, headers=_header, allow_redirects=False, timeout=30)
+        
+        login_cookies = session.cookies.get_dict()
+        
+        if "c_user" in login_cookies:
+            return ";".join([f"{key}={value}" for key, value in login_cookies.items()])
+        return None
+            
+    except:
+        return None
+
+def bulk_cookie_getter():
+    try:
+        banner()
+        print(Panel("[white]Starting Bulk Cookie Getter...", 
+            title="[bright_white]>> [Cookie Getter] <<",
+            width=65,
+            style="bold bright_white"
+        ))
+
+        if not os.path.exists(ACCOUNTS_PATH):
+            print(Panel("[red]accounts.txt not found!\n[white]Creating example accounts.txt...", 
+                title="[bright_white]>> [Error] <<",
+                width=65,
+                style="bold bright_white"
+            ))
+            create_required_files()
+            return
+            
+        with open(ACCOUNTS_PATH, "r") as f:
+            accounts = [line.strip() for line in f if line.strip() and not line.startswith("#")]
+            
+        if not accounts:
+            print(Panel("[red]No accounts found in accounts.txt!\n[white]Please add accounts with format:\n[cyan]e:email@example.com p:password", 
+                title="[bright_white]>> [Error] <<",
+                width=65,
+                style="bold bright_white"
+            ))
+            return
+            
+        print(Panel(f"[green]Loaded {len(accounts)} accounts", 
+            title="[bright_white]>> [Info] <<",
+            width=65,
+            style="bold bright_white"
+        ))
+        
+        success = 0
+        failed = 0
+        
+        for account in accounts:
+            try:
+                if "e:" not in account or "p:" not in account:
+                    continue
+                    
+                email = account.split("e:")[1].split(" p:")[0].strip()
+                password = account.split("p:")[1].strip()
+                
+                print(f"[cyan]Trying[/cyan] {email}")
+                cookie = get_cookie(email, password)
+                
+                if cookie:
+                    with open(COOKIE_PATH, "a") as f:
+                        f.write(cookie + "\n")
+                    success += 1
+                    print(f"[green]Success[/green] {email}")
+                else:
+                    failed += 1
+                    print(f"[red]Failed[/red] {email}")
+                    
+                time.sleep(2)  # Delay between requests
+                
+            except Exception as e:
+                failed += 1
+                print(f"[red]Error[/red] with {email}: {str(e)}")
+                
+        print(Panel(f"""[yellow]⚡[white] Total Accounts: [cyan]{len(accounts)}
+[yellow]⚡[white] Success: [green]{success}
+[yellow]⚡[white] Failed: [red]{failed}
+[yellow]⚡[white] Cookies saved to: [cyan]cookie.txt""",
+            title="[bright_white]>> [Results] <<",
+            width=65,
+            style="bold bright_white"
+        ))
+                
+    except Exception as e:
+        print(Panel(f"[red]Error: {str(e)}", 
+            title="[bright_white]>> [Error] <<",
+            width=65,
+            style="bold bright_white"
+        ))
 
 def loading_animation(duration: int, message: str):
     frames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
@@ -129,24 +293,6 @@ def banner():
         style="bold bright_white",
     ))
 
-def show_main_menu():
-    print(Panel("""[1] Start Share Process
-[2] Update Tool
-[3] Exit""",
-        title="[bright_white]>> [Main Menu] <<",
-        width=65,
-        style="bold bright_white"
-    ))
-    
-    choice = console.input("[bright_white]Enter choice (1-3): ")
-    
-    if choice == "2":
-        update_tool()
-        return True
-    elif choice == "3":
-        return False
-    return True
-
 class FacebookShare:
     def __init__(self, cookie, post_link, share_count, cookie_index, stats):
         self.cookie = cookie
@@ -199,7 +345,7 @@ class FacebookShare:
                 )
                 data = response.json()
                 
-                if 'id' in data:
+               if 'id' in data:
                     count += 1
                     self.stats.update_success(self.cookie_index)
                     timestamp = datetime.now().strftime("%H:%M:%S")
@@ -237,24 +383,51 @@ class ShareStats:
 
 def load_cookies():
     try:
-        cookie_file = Path(COOKIE_PATH)
-        if cookie_file.exists():
-            with open(cookie_file, 'r') as f:
-                cookies = [line.strip() for line in f if line.strip()]
-            console.print(f"[green]Successfully loaded {len(cookies)} cookies from {COOKIE_PATH}")
-            return cookies
-        else:
-            console.print(f"[red]Cookie file not found at {COOKIE_PATH}")
-            console.print("[yellow]Creating directory structure...")
-            os.makedirs(os.path.dirname(COOKIE_PATH), exist_ok=True)
-            with open(cookie_file, 'w') as f:
+        if not os.path.exists(COOKIE_PATH):
+            with open(COOKIE_PATH, 'w') as f:
                 f.write("")
-            console.print(f"[green]Created empty cookie file at {COOKIE_PATH}")
+            console.print(f"[green]Created empty cookie.txt file")
             console.print("[yellow]Please add your cookies to the file and run the script again")
             return None
+            
+        with open(COOKIE_PATH, 'r') as f:
+            cookies = [line.strip() for line in f if line.strip()]
+        
+        if not cookies:
+            console.print("[yellow]No cookies found in cookie.txt")
+            console.print("[yellow]Use Bulk Cookie Getter or add cookies manually")
+            return None
+            
+        console.print(f"[green]Successfully loaded {len(cookies)} cookies")
+        return cookies
     except Exception as e:
         console.print(f"[red]Error loading cookies: {str(e)}")
         return None
+
+def show_main_menu():
+    print(Panel("""[1] Start Share Process
+[2] Bulk Cookie Getter
+[3] Update Tool
+[4] Exit""",
+        title="[bright_white]>> [Main Menu] <<",
+        width=65,
+        style="bold bright_white"
+    ))
+    
+    choice = console.input("[bright_white]Enter choice (1-4): ")
+    
+    if choice == "2":
+        bulk_cookie_getter()
+        return True
+    elif choice == "3":
+        update_tool()
+        return True
+    elif choice == "4":
+        return False
+    elif choice == "1":
+        main()
+        return True
+    return True
 
 def main():
     try:
@@ -376,6 +549,7 @@ def restart_script():
     return choice.lower() != 'exit'
 
 if __name__ == "__main__":
+    create_required_files()
     key = get_key()
     if check_approval(key):
         while True:
@@ -387,8 +561,6 @@ if __name__ == "__main__":
                     style="bold bright_white"
                 ))
                 break
-                
-            main()
             if not restart_script():
                 print(Panel("[yellow]Thanks for using SpamShare!", 
                     title="[bright_white]>> [Goodbye] <<",
