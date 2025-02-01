@@ -381,7 +381,7 @@ def main():
         for thread in threads:
             thread.join()
 
-       print(Panel(f"""[green]Process completed!
+        print(Panel(f"""[green]Process completed!
 [yellow]⚡[white] Total shares attempted: [cyan]{stats.success_count + stats.failed_count}
 [yellow]⚡[white] Successful: [green]{stats.success_count}
 [yellow]⚡[white] Failed: [red]{stats.failed_count}
