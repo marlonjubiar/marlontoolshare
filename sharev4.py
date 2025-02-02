@@ -65,18 +65,6 @@ def loading_animation(duration: int, message: str):
     finally:
         print("\r" + " " * (len(message) + 30), end="\r")
 
-def process_cookies():
-    try:
-        dots = [".", "..", "..."]
-        colors = ["cyan", "green", "yellow"]
-        for _ in range(3):
-            for i, dot in enumerate(dots):
-                print(f"\r[{colors[i % len(colors)]}]Processing cookies{dot}[/]", end="", flush=True)
-                time.sleep(0.3)
-        print("\r" + " " * 50, end="\r")
-    except KeyboardInterrupt:
-        pass
-
 def process_animation(message: str, duration: int = 3):
     try:
         chars = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
@@ -197,8 +185,10 @@ def create_required_files():
     if not os.path.exists(ACCOUNTS_PATH):
         with open(ACCOUNTS_PATH, 'w') as f:
             f.write("# Format your accounts like this:\n")
-            f.write("e:example123@gmail.com p:12345\n")
-            f.write("e:another@gmail.com p:password123\n")
+            f.write("e : email@example.com\n")
+            f.write("p : password123\n")
+            f.write("e : another@example.com\n")
+            f.write("p : anotherpass\n")
 
 def generate_user_agent():
     amazon = ["E6653", "E6633", "E6853", "E6833", "F3111", "F3111 F3113", "F5122", 
@@ -269,11 +259,30 @@ def get_cookie(uid, pww, ua=None):
 
 def process_account(account):
     try:
-        if "e:" not in account or "p:" not in account:
-            return None
-            
-        email = account.split("e:")[1].split(" p:")[0].strip()
-        password = account.split("p:")[1].strip()
+        # Handle both formats: single line and multi line
+        if 'p:' in account:
+            # Single line format
+            email = account.split("e:")[1].split("p:")[0].strip()
+            password = account.split("p:")[1].strip()
+        else:
+            # Multi line format with 'e :' and 'p :'
+            if 'e :' in account:
+                email = account.split("e :")[1].strip()
+            else:
+                return None
+                
+            # Try to find corresponding password in next line
+            try:
+                with open(ACCOUNTS_PATH, 'r') as f:
+                    lines = f.readlines()
+                    current_line = lines.index(account + '\n')
+                    next_line = lines[current_line + 1].strip()
+                    if 'p :' in next_line:
+                        password = next_line.split("p :")[1].strip()
+                    else:
+                        return None
+            except:
+                return None
         
         print(f"[cyan]Trying[/cyan] {email}")
         cookie = get_cookie(email, password)
@@ -286,7 +295,7 @@ def process_account(account):
             return None
             
     except Exception as e:
-        print(f"[red]Error[/red] with account: {str(e)}")
+        print(f"[red]Error[/red] processing account: {str(e)}")
         return None
 
 def bulk_cookie_getter():
@@ -308,10 +317,22 @@ def bulk_cookie_getter():
             return
             
         with open(ACCOUNTS_PATH, "r") as f:
-            accounts = [line.strip() for line in f if line.strip() and not line.startswith("#")]
+            lines = f.readlines()
+            accounts = []
+            i = 0
+            while i < len(lines):
+                line = lines[i].strip()
+                if line.startswith('e :'):
+                    if i + 1 < len(lines) and 'p :' in lines[i + 1]:
+                        accounts.append(line)  # Process will get password from next line
+                        i += 2
+                    else:
+                        i += 1
+                else:
+                    i += 1
             
         if not accounts:
-            print(Panel("[red]No accounts found in accounts.txt!\n[white]Please add accounts with format:\n[cyan]e:email@example.com p:password", 
+            print(Panel("[red]No accounts found in accounts.txt!\n[white]Please add accounts with format:\n[cyan]e : email@example.com\np : password", 
                 title="[bright_white]>> [Error] <<",
                 width=65,
                 style="bold bright_white"
@@ -372,7 +393,6 @@ def banner():
                 cookies = [line.strip() for line in f if line.strip()]
                 cookie_count = len(cookies)
                 
-            # Only check if there are cookies
             if cookie_count > 0:
                 with ThreadPoolExecutor(max_workers=10) as executor:
                     futures = [executor.submit(get_cookie_info, cookie) for cookie in cookies]
@@ -632,8 +652,7 @@ def main():
             style="bold bright_white"
         ))
         
-        process_cookies()  # Add fancy loading animation
-        loading_animation(3, "Validating cookies...")  # Add second loading animation
+        process_animation("Validating cookies...", 3)  
         
         print(Panel(f"""[green]Cookies loaded successfully!
 [yellow]⚡[white] Total cookies: [cyan]{len(config['cookies'])}
