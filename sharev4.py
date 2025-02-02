@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
-import os
-import sys
-import time
 import threading
 import requests
+import sys
+import os
+import time
+import subprocess
+from typing import List, Optional, Dict
 import json
 from datetime import datetime, timedelta
 from rich.console import Console
@@ -15,7 +17,6 @@ from pathlib import Path
 import uuid
 import random
 from concurrent.futures import ThreadPoolExecutor, as_completed
-import subprocess
 
 def install_packages():
     required_packages = ['requests', 'rich', 'pytz', 'pathlib']
@@ -47,6 +48,7 @@ config = {
     'target_shares': 0
 }
 
+#-----------------------------[ANIMATIONS]-----------------------------------#
 def loading_animation(duration: int, message: str):
     frames = ["⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷"]
     colors = ["cyan", "green", "yellow", "blue", "magenta", "red"]
@@ -82,6 +84,7 @@ def process_animation(message: str, duration: int = 3):
     finally:
         print("\r" + " " * (len(message) + 20), end="\r")
 
+#-----------------------------[APPROVAL KEY]-----------------------------------#
 def get_key():
     a = str(os.geteuid())
     b = str(os.geteuid())
@@ -102,6 +105,7 @@ def check_approval(key):
     except:
         return False
 
+#-----------------------------[COOKIE MANAGEMENT]-----------------------------------#
 def get_cookie_info(cookie):
     try:
         session = requests.Session()
@@ -174,6 +178,147 @@ def check_and_clean_cookies():
         ))
     return False
 
+#-----------------------------[AUTO COMMENT]-----------------------------------#
+def get_token_from_cookie(cookie):
+    try:
+        headers = {
+            'cookie': cookie,
+            'user-agent': generate_user_agent()
+        }
+        response = requests.get('https://business.facebook.com/content_management', headers=headers)
+        token_match = re.search('EAAG(.*?)","', response.text)
+        if token_match:
+            return 'EAAG' + token_match.group(1)
+        return None
+    except:
+        return None
+
+def auto_comment(cookie, post_id, message, comment_count):
+    token = get_token_from_cookie(cookie)
+    if not token:
+        print(f"[red]Failed to get token from cookie")
+        return 0, comment_count
+
+    headers = {
+        'Content-Type': 'application/json',
+        'Authorization': f'Bearer {token}',
+        'user-agent': '[FBAN/FB4A;FBAV/445.0.0.19.119;FBBV/21954989;FBDM/{density=3.0,width=1080,height=1920};FBLC/en_GB;FBCR/SMART;FBMF/samsung;FBBD/samsung;FBPN/com.facebook.katana;FBDV/SM-F926W;FBSV/8;FBCA/armeabi-v7a:armeabi;]'
+    }
+
+    success = 0
+    failed = 0
+    
+    for i in range(int(comment_count)):
+        try:
+            response = requests.post(
+                f'https://graph.facebook.com/{post_id}/comments',
+                headers=headers,
+                data={'message': message}
+            ).json()
+            
+            if 'id' in response:
+                success += 1
+                print(f"[cyan][{datetime.now().strftime('%H:%M:%S')}][/cyan][green] Comment {i+1}/{comment_count} posted successfully")
+            else:
+                failed += 1
+                print(f"[red]Failed to post comment {i+1}")
+            
+            time.sleep(random.uniform(1, 3))  # Random delay between comments
+            
+        except Exception as e:
+            failed += 1
+            print(f"[red]Error posting comment: {str(e)}")
+    
+    return success, failed
+
+def comment_menu():
+    try:
+        banner()
+        
+        if not os.path.exists(COOKIE_PATH):
+            print(Panel("[red]No cookies found. Please add cookies first.", 
+                title="[bright_white]>> [Error] <<",
+                width=65,
+                style="bold bright_white"
+            ))
+            return
+
+        with open(COOKIE_PATH, 'r') as f:
+            cookies = [line.strip() for line in f if line.strip()]
+            
+        if not cookies:
+            print(Panel("[red]No cookies found in cookie.txt", 
+                title="[bright_white]>> [Error] <<",
+                width=65,
+                style="bold bright_white"
+            ))
+            return
+
+        print(Panel("[white]Enter Post ID (format: userid_postid)", 
+            title="[bright_white]>> [Post Configuration] <<",
+            width=65,
+            style="bold bright_white",
+            subtitle="╭─────",
+            subtitle_align="left"
+        ))
+        post_id = console.input("[bright_white]   ╰─> ")
+        
+        print(Panel("[white]Enter comment message", 
+            title="[bright_white]>> [Comment Configuration] <<",
+            width=65,
+            style="bold bright_white",
+            subtitle="╭─────",
+            subtitle_align="left"
+        ))
+        message = console.input("[bright_white]   ╰─> ")
+        
+        print(Panel("[white]Enter comments per cookie (1-100)", 
+            title="[bright_white]>> [Comment Configuration] <<",
+            width=65,
+            style="bold bright_white",
+            subtitle="╭─────",
+            subtitle_align="left"
+        ))
+        comment_count = int(console.input("[bright_white]   ╰─> "))
+        
+        total_success = 0
+        total_failed = 0
+        
+        print(Panel("[green]Starting comment process...", 
+            title="[bright_white]>> [Process Started] <<",
+            width=65,
+            style="bold bright_white"
+        ))
+        
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            futures = []
+            for i, cookie in enumerate(cookies, 1):
+                print(f"\n[cyan]Processing cookie {i}/{len(cookies)}[/cyan]")
+                future = executor.submit(auto_comment, cookie, post_id, message, comment_count)
+                futures.append(future)
+            
+            for future in as_completed(futures):
+                success, failed = future.result()
+                total_success += success
+                total_failed += failed
+        
+        print(Panel(f"""[green]Process completed!
+[yellow]⚡[white] Total comments attempted: [cyan]{total_success + total_failed}
+[yellow]⚡[white] Successful: [green]{total_success}
+[yellow]⚡[white] Failed: [red]{total_failed}""",
+            title="[bright_white]>> [Completed] <<",
+            width=65,
+            style="bold bright_white"
+        ))
+        
+    except Exception as e:
+        print(Panel(f"[red]Error: {str(e)}", 
+            title="[bright_white]>> [Error] <<",
+            width=65,
+            style="bold bright_white"
+        ))
+
+#-----------------------------[FILE MANAGEMENT]-----------------------------------#
 def create_required_files():
     os.makedirs(os.path.dirname(COOKIE_PATH), exist_ok=True)
     os.makedirs(os.path.dirname(ACCOUNTS_PATH), exist_ok=True)
@@ -190,12 +335,14 @@ def create_required_files():
             f.write("e : another@example.com\n")
             f.write("p : anotherpass\n")
 
+#-----------------------------[USER AGENT]-----------------------------------#
 def generate_user_agent():
     amazon = ["E6653", "E6633", "E6853", "E6833", "F3111", "F3111 F3113", "F5122", 
               "F3111 F3113", "SO-04H", "F3212", "F3311", "F8331", "SO-02J", "G3116", "G8232"]
     
     return f"Mozilla/5.0 (Linux; Android {random.randint(4,13)}; {random.choice(amazon)}; Windows 10 Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Kiwi Chrome/{random.randint(84,106)}.0.{random.randint(4200,4900)}.{random.randint(40,140)} Mobile Safari/537.36"
 
+#-----------------------------[LOGIN HANDLERS]-----------------------------------#
 def get_lsd_token(session):
     try:
         git_fb = session.get("https://touch.facebook.com/pages/create/?ref_type=registration_form", timeout=30).text
@@ -259,30 +406,18 @@ def get_cookie(uid, pww, ua=None):
 
 def process_account(account):
     try:
-        # Handle both formats: single line and multi line
-        if 'p:' in account:
-            # Single line format
-            email = account.split("e:")[1].split("p:")[0].strip()
-            password = account.split("p:")[1].strip()
+        if 'e :' in account:
+            email = account.split("e :")[1].strip()
+            with open(ACCOUNTS_PATH, 'r') as f:
+                lines = f.readlines()
+                current_line = lines.index(account + '\n')
+                next_line = lines[current_line + 1].strip()
+                if 'p :' in next_line:
+                    password = next_line.split("p :")[1].strip()
+                else:
+                    return None
         else:
-            # Multi line format with 'e :' and 'p :'
-            if 'e :' in account:
-                email = account.split("e :")[1].strip()
-            else:
-                return None
-                
-            # Try to find corresponding password in next line
-            try:
-                with open(ACCOUNTS_PATH, 'r') as f:
-                    lines = f.readlines()
-                    current_line = lines.index(account + '\n')
-                    next_line = lines[current_line + 1].strip()
-                    if 'p :' in next_line:
-                        password = next_line.split("p :")[1].strip()
-                    else:
-                        return None
-            except:
-                return None
+            return None
         
         print(f"[cyan]Trying[/cyan] {email}")
         cookie = get_cookie(email, password)
@@ -298,179 +433,7 @@ def process_account(account):
         print(f"[red]Error[/red] processing account: {str(e)}")
         return None
 
-def bulk_cookie_getter():
-    try:
-        banner()
-        print(Panel("[white]Starting Bulk Cookie Getter...", 
-            title="[bright_white]>> [Cookie Getter] <<",
-            width=65,
-            style="bold bright_white"
-        ))
-
-        if not os.path.exists(ACCOUNTS_PATH):
-            print(Panel("[red]accounts.txt not found!\n[white]Creating example accounts.txt...", 
-                title="[bright_white]>> [Error] <<",
-                width=65,
-                style="bold bright_white"
-            ))
-            create_required_files()
-            return
-            
-        with open(ACCOUNTS_PATH, "r") as f:
-            lines = f.readlines()
-            accounts = []
-            i = 0
-            while i < len(lines):
-                line = lines[i].strip()
-                if line.startswith('e :'):
-                    if i + 1 < len(lines) and 'p :' in lines[i + 1]:
-                        accounts.append(line)  # Process will get password from next line
-                        i += 2
-                    else:
-                        i += 1
-                else:
-                    i += 1
-            
-        if not accounts:
-            print(Panel("[red]No accounts found in accounts.txt!\n[white]Please add accounts with format:\n[cyan]e : email@example.com\np : password", 
-                title="[bright_white]>> [Error] <<",
-                width=65,
-                style="bold bright_white"
-            ))
-            return
-            
-        print(Panel(f"[green]Loaded {len(accounts)} accounts", 
-            title="[bright_white]>> [Info] <<",
-            width=65,
-            style="bold bright_white"
-        ))
-        
-        success = 0
-        failed = 0
-        valid_cookies = []
-        
-        with ThreadPoolExecutor(max_workers=25) as executor:
-            future_to_account = {executor.submit(process_account, account): account for account in accounts}
-            
-            for future in as_completed(future_to_account):
-                cookie = future.result()
-                if cookie:
-                    valid_cookies.append(cookie)
-                    success += 1
-                else:
-                    failed += 1
-        
-        if valid_cookies:
-            with open(COOKIE_PATH, "a") as f:
-                for cookie in valid_cookies:
-                    f.write(cookie + "\n")
-                
-        print(Panel(f"""[yellow]⚡[white] Total Accounts: [cyan]{len(accounts)}
-[yellow]⚡[white] Success: [green]{success}
-[yellow]⚡[white] Failed: [red]{failed}
-[yellow]⚡[white] Cookies saved to: [cyan]{COOKIE_PATH}""",
-            title="[bright_white]>> [Results] <<",
-            width=65,
-            style="bold bright_white"
-        ))
-                
-    except Exception as e:
-        print(Panel(f"[red]Error: {str(e)}", 
-            title="[bright_white]>> [Error] <<",
-            width=65,
-            style="bold bright_white"
-        ))
-
-def banner():
-    os.system('clear' if os.name == 'posix' else 'cls')
-    key = get_key()
-    cookie_count = 0
-    active_cookies = 0
-    
-    try:
-        if os.path.exists(COOKIE_PATH):
-            with open(COOKIE_PATH, 'r') as f:
-                cookies = [line.strip() for line in f if line.strip()]
-                cookie_count = len(cookies)
-                
-            if cookie_count > 0:
-                with ThreadPoolExecutor(max_workers=10) as executor:
-                    futures = [executor.submit(get_cookie_info, cookie) for cookie in cookies]
-                    active_cookies = sum(1 for future in as_completed(futures) if future.result())
-    except:
-        pass
-    
-    print(Panel(
-        r"""[red]●[yellow] ●[green] ●
-[cyan]██████╗░██╗░░░██╗░█████╗░
-[cyan]██╔══██╗╚██╗░██╔╝██╔══██╗
-[cyan]██████╔╝░╚████╔╝░██║░░██║
-[cyan]██╔══██╗░░╚██╔╝░░██║░░██║
-[cyan]██║░░██║░░░██║░░░╚█████╔╝
-[cyan]╚═╝░░╚═╝░░░╚═╝░░░░╚════╝░""",
-        title="[bright_white] SPAMSHARE [green]●[yellow] Active [/]",
-        width=65,
-        style="bold bright_white",
-    ))
-    
-    print(Panel(
-        f"""[yellow]⚡[cyan] Tool     : [green]SpamShare[/]
-[yellow]⚡[cyan] Version  : [green]1.0.0[/]
-[yellow]⚡[cyan] Dev      : [green]Ryo Evisu[/]
-[yellow]⚡[cyan] Status   : [red]Premium[/]""",
-        title="[white on red] INFORMATION [/]",
-        width=65,
-        style="bold bright_white",
-    ))
-    
-    print(Panel(
-        f"""[yellow]⚡[cyan] Key      : [cyan]{key}[/]
-[yellow]⚡[cyan] Premium  : [green]True[/]
-[yellow]⚡[cyan] Expired  : [red]Never[/]
-[yellow]⚡[cyan] Version  : [green]Latest[/]""",
-        title="[white on red] KEY INFO [/]",
-        width=65,
-        style="bold bright_white",
-    ))
-
-    print(Panel(
-        f"""[yellow]⚡[cyan] Total Cookies : [green]{cookie_count}[/]
-[yellow]⚡[cyan] Active Cookies: [green]{active_cookies}[/]
-[yellow]⚡[cyan] Dead Cookies  : [red]{cookie_count - active_cookies}[/]
-[yellow]⚡[cyan] Cookie Path   : [cyan]{COOKIE_PATH}[/]""",
-        title="[white on red] COOKIE INFO [/]",
-        width=65,
-        style="bold bright_white",
-    ))
-    
-    if cookie_count > 0 and active_cookies < cookie_count:
-        check_and_clean_cookies()
-
-def show_main_menu():
-    print(Panel("""[1] Start Share Process
-[2] Bulk Cookie Getter
-[3] Update Tool
-[4] Exit""",
-        title="[bright_white]>> [Main Menu] <<",
-        width=65,
-        style="bold bright_white"
-    ))
-    
-    choice = console.input("[bright_white]Enter choice (1-4): ")
-    
-    if choice == "2":
-        bulk_cookie_getter()
-        return True
-    elif choice == "3":
-        update_tool()
-        return True
-    elif choice == "4":
-        return False
-    elif choice == "1":
-        main()
-        return True
-    return True
-
+#-----------------------------[SHARE FUNCTIONALITY]-----------------------------------#
 class FacebookShare:
     def __init__(self, cookie, post_link, share_count, cookie_index, stats):
         self.cookie = cookie
@@ -582,6 +545,90 @@ class ShareStats:
                 self.cookie_stats[cookie_index] = {"success": 0, "failed": 0}
             self.cookie_stats[cookie_index]["failed"] += 1
 
+#-----------------------------[COOKIE MANAGEMENT]-----------------------------------#
+def bulk_cookie_getter():
+    try:
+        banner()
+        print(Panel("[white]Starting Bulk Cookie Getter...", 
+            title="[bright_white]>> [Cookie Getter] <<",
+            width=65,
+            style="bold bright_white"
+        ))
+
+        if not os.path.exists(ACCOUNTS_PATH):
+            print(Panel("[red]accounts.txt not found!\n[white]Creating example accounts.txt...", 
+                title="[bright_white]>> [Error] <<",
+                width=65,
+                style="bold bright_white"
+            ))
+            create_required_files()
+            return
+            
+        with open(ACCOUNTS_PATH, "r") as f:
+            lines = f.readlines()
+            accounts = []
+            i = 0
+            while i < len(lines):
+                line = lines[i].strip()
+                if line.startswith('e :'):
+                    if i + 1 < len(lines) and 'p :' in lines[i + 1]:
+                        accounts.append(line)
+                        i += 2
+                    else:
+                        i += 1
+                else:
+                    i += 1
+            
+        if not accounts:
+            print(Panel("[red]No accounts found in accounts.txt!\n[white]Please add accounts with format:\n[cyan]e : email@example.com\np : password", 
+                title="[bright_white]>> [Error] <<",
+                width=65,
+                style="bold bright_white"
+            ))
+            return
+            
+        print(Panel(f"[green]Loaded {len(accounts)} accounts", 
+            title="[bright_white]>> [Info] <<",
+            width=65,
+            style="bold bright_white"
+        ))
+        
+        success = 0
+        failed = 0
+        valid_cookies = []
+        
+        with ThreadPoolExecutor(max_workers=25) as executor:
+            future_to_account = {executor.submit(process_account, account): account for account in accounts}
+            
+            for future in as_completed(future_to_account):
+                cookie = future.result()
+                if cookie:
+                    valid_cookies.append(cookie)
+                    success += 1
+                else:
+                    failed += 1
+        
+        if valid_cookies:
+            with open(COOKIE_PATH, "a") as f:
+                for cookie in valid_cookies:
+                    f.write(cookie + "\n")
+                
+        print(Panel(f"""[yellow]⚡[white] Total Accounts: [cyan]{len(accounts)}
+[yellow]⚡[white] Success: [green]{success}
+[yellow]⚡[white] Failed: [red]{failed}
+[yellow]⚡[white] Cookies saved to: [cyan]{COOKIE_PATH}""",
+            title="[bright_white]>> [Results] <<",
+            width=65,
+            style="bold bright_white"
+        ))
+                
+    except Exception as e:
+        print(Panel(f"[red]Error: {str(e)}", 
+            title="[bright_white]>> [Error] <<",
+            width=65,
+            style="bold bright_white"
+        ))
+
 def load_cookies():
     try:
         if not os.path.exists(COOKIE_PATH):
@@ -606,6 +653,7 @@ def load_cookies():
         console.print(f"[red]Error loading cookies: {str(e)}")
         return None
 
+#-----------------------------[UI AND MENUS]-----------------------------------#
 def update_tool():
     try:
         print(Panel("[white]Checking for updates...", 
@@ -637,6 +685,100 @@ def update_tool():
             style="bold bright_white"
         ))
         time.sleep(2)
+
+def banner():
+    os.system('clear' if os.name == 'posix' else 'cls')
+    key = get_key()
+    cookie_count = 0
+    active_cookies = 0
+    
+    try:
+        if os.path.exists(COOKIE_PATH):
+            with open(COOKIE_PATH, 'r') as f:
+                cookies = [line.strip() for line in f if line.strip()]
+                cookie_count = len(cookies)
+                
+            if cookie_count > 0:
+                with ThreadPoolExecutor(max_workers=10) as executor:
+                    futures = [executor.submit(get_cookie_info, cookie) for cookie in cookies]
+                    active_cookies = sum(1 for future in as_completed(futures) if future.result())
+    except:
+        pass
+    
+    print(Panel(
+        r"""[red]●[yellow] ●[green] ●
+[cyan]██████╗░██╗░░░██╗░█████╗░
+[cyan]██╔══██╗╚██╗░██╔╝██╔══██╗
+[cyan]██████╔╝░╚████╔╝░██║░░██║
+[cyan]██╔══██╗░░╚██╔╝░░██║░░██║
+[cyan]██║░░██║░░░██║░░░╚█████╔╝
+[cyan]╚═╝░░╚═╝░░░╚═╝░░░░╚════╝░""",
+        title="[bright_white] SPAMSHARE [green]●[yellow] Active [/]",
+        width=65,
+        style="bold bright_white",
+    ))
+    
+    print(Panel(
+        f"""[yellow]⚡[cyan] Tool     : [green]SpamShare[/]
+[yellow]⚡[cyan] Version  : [green]1.0.0[/]
+[yellow]⚡[cyan] Dev      : [green]Ryo Evisu[/]
+[yellow]⚡[cyan] Status   : [red]Premium[/]""",
+        title="[white on red] INFORMATION [/]",
+        width=65,
+        style="bold bright_white",
+    ))
+    
+    print(Panel(
+        f"""[yellow]⚡[cyan] Key      : [cyan]{key}[/]
+[yellow]⚡[cyan] Premium  : [green]True[/]
+[yellow]⚡[cyan] Expired  : [red]Never[/]
+[yellow]⚡[cyan] Version  : [green]Latest[/]""",
+        title="[white on red] KEY INFO [/]",
+        width=65,
+        style="bold bright_white",
+    ))
+
+    print(Panel(
+        f"""[yellow]⚡[cyan] Total Cookies : [green]{cookie_count}[/]
+[yellow]⚡[cyan] Active Cookies: [green]{active_cookies}[/]
+[yellow]⚡[cyan] Dead Cookies  : [red]{cookie_count - active_cookies}[/]
+[yellow]⚡[cyan] Cookie Path   : [cyan]{COOKIE_PATH}[/]""",
+        title="[white on red] COOKIE INFO [/]",
+        width=65,
+        style="bold bright_white",
+    ))
+    
+    if cookie_count > 0 and active_cookies < cookie_count:
+        check_and_clean_cookies()
+
+def show_main_menu():
+    print(Panel("""[1] Start Share Process
+[2] Bulk Cookie Getter
+[3] Auto Comment
+[4] Update Tool
+[5] Exit""",
+        title="[bright_white]>> [Main Menu] <<",
+        width=65,
+        style="bold bright_white"
+    ))
+    
+    choice = console.input("[bright_white]Enter choice (1-5): ")
+    
+    if choice == "2":
+        bulk_cookie_getter()
+        return True
+    elif choice == "3":
+        comment_menu()
+        return True
+    elif choice == "4":
+        update_tool()
+        return True
+    elif choice == "5":
+        return False
+    elif choice == "1":
+        main()
+        return True
+    return True
 
 def main():
     try:
