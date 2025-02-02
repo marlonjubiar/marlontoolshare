@@ -88,119 +88,99 @@ def get_cookie_info(cookie):
             'user-agent': generate_user_agent()
         }
         session.headers.update(headers)
-
-        # First check: Access token validation
+        
+        # First check if token can be retrieved
         try:
-            token_response = session.get('https://business.facebook.com/content_management')
-            if 'EAAG' not in token_response.text:
+            response = session.get('https://business.facebook.com/content_management')
+            if 'EAAG' not in response.text:
                 return None
         except:
             return None
-
-        # Second check: Profile access
+            
+        # Then check profile access
         try:
             response = session.get('https://www.facebook.com/me', allow_redirects=False)
             if response.status_code != 302:
                 return None
-
+                
             profile_url = response.headers.get('location')
             if not profile_url or 'checkpoint' in profile_url:
                 return None
-
-            user_id = profile_url.split('/')[-1] if profile_url else 'Unknown'
-        except:
-            return None
-
-        # Third check: Cookie validation
-        try:
-            cookie_dict = dict(x.split('=')[0].strip():x.split('=')[1].strip() for x in cookie.split(';'))
-            if 'c_user' not in cookie_dict or 'xs' not in cookie_dict:
-                return None
-        except:
-            return None
-
-        # Final check: Account status
-        try:
-            status_response = session.get(f'https://www.facebook.com/{user_id}')
-            if 'temporarily blocked' in status_response.text.lower() or 'checkpoint' in status_response.text.lower():
+                
+            user_id = profile_url.split('/')[-1] if profile_url else None
+            if not user_id or user_id == 'login':
                 return None
                 
-            username = re.search(r'<title>(.*?)</title>', status_response.text)
-            username = username.group(1).replace(' | Facebook', '') if username else 'Unknown'
+            response = session.get(f'https://www.facebook.com/{user_id}')
+            if 'checkpoint' in response.text or 'login' in response.url:
+                return None
+                
+            username = re.search(r'<title>(.*?)</title>', response.text)
+            username = username.group(1).replace(' | Facebook', '') if username else None
             
-            # Test share capability
-            token = re.search('EAAG(.*?)","', token_response.text)
-            if token:
-                test_token = 'EAAG' + token.group(1)
-                share_test = session.post(
-                    f'https://b-graph.facebook.com/me/feed?link=https://facebook.com&published=0&access_token={test_token}',
-                    headers={'host': 'b-graph.facebook.com'}
-                )
-                if 'id' not in share_test.json():
+            if username:
+                # Final validation - try to get access token
+                try:
+                    token_response = session.get('https://business.facebook.com/content_management')
+                    if 'EAAG' in token_response.text:
+                        return {
+                            'uid': user_id,
+                            'name': username,
+                            'status': 'Active'
+                        }
+                except:
                     return None
-            else:
-                return None
-
-            return {
-                'uid': user_id,
-                'name': username,
-                'status': 'Active'
-            }
-        except:
-            return None
-
     except:
-        return None
+        pass
+    return None
 
-def validate_cookie_file():
+def validate_cookies():
+    valid_cookies = []
+    dead_cookies = []
+    
     try:
-        if not os.path.exists(COOKIE_PATH):
-            return False
-            
-        with open(COOKIE_PATH, 'r') as f:
-            cookies = [line.strip() for line in f if line.strip()]
-            
-        if not cookies:
-            return False
-            
-        print(Panel("[white]Validating cookies...", 
-            title="[bright_white]>> [Process] <<",
-            width=65,
-            style="bold bright_white"
-        ))
-        
-        valid_cookies = []
-        total = len(cookies)
-        current = 0
-        
-        for cookie in cookies:
-            current += 1
-            print(f"\r[cyan]Checking cookie {current}/{total}", end="")
-            if get_cookie_info(cookie):
-                valid_cookies.append(cookie)
+        if os.path.exists(COOKIE_PATH):
+            with open(COOKIE_PATH, 'r') as f:
+                cookies = [line.strip() for line in f if line.strip()]
                 
-        print("\r" + " " * 50 + "\r", end="")
+            print(Panel("[white]Validating cookies...", 
+                title="[bright_white]>> [Validation] <<",
+                width=65,
+                style="bold bright_white"
+            ))
                 
-        if not valid_cookies:
-            return False
-            
-        with open(COOKIE_PATH, 'w') as f:
-            for cookie in valid_cookies:
-                f.write(cookie + '\n')
+            for i, cookie in enumerate(cookies, 1):
+                print(f"[cyan]Checking cookie {i}...")
+                info = get_cookie_info(cookie)
                 
-        print(Panel(f"""[green]Cookie validation completed!
-[yellow]⚡[white] Total checked: [cyan]{total}
-[yellow]⚡[white] Valid cookies: [green]{len(valid_cookies)}
-[yellow]⚡[white] Invalid removed: [red]{total - len(valid_cookies)}""",
-            title="[bright_white]>> [Validation Results] <<",
-            width=65,
-            style="bold bright_white"
-        ))
+                if info:
+                    print(f"[green]Cookie {i} is valid - {info['name']}")
+                    valid_cookies.append(cookie)
+                else:
+                    print(f"[red]Cookie {i} is dead/blocked")
+                    dead_cookies.append(cookie)
                 
-        return True
-        
-    except:
-        return False
+            if dead_cookies:
+                print(Panel(f"""[yellow]⚡[white] Found dead/blocked cookies
+[yellow]⚡[white] Valid: [green]{len(valid_cookies)}
+[yellow]⚡[white] Dead: [red]{len(dead_cookies)}
+
+[white]Removing dead cookies...""",
+                    title="[bright_white]>> [Cleanup] <<",
+                    width=65,
+                    style="bold bright_white"
+                ))
+                
+                with open(COOKIE_PATH, 'w') as f:
+                    for cookie in valid_cookies:
+                        f.write(cookie + '\n')
+                        
+            return valid_cookies
+                    
+    except Exception as e:
+        print(f"[red]Error validating cookies: {str(e)}")
+    
+    return valid_cookies
 
 #-----------------------------[CREATE REQUIRED FILES]-----------------------------------#
 def create_required_files():
@@ -281,7 +261,7 @@ def get_cookie(uid, pww, ua=None):
         
         if "c_user" in login_cookies:
             cookie = ";".join([f"{key}={value}" for key, value in login_cookies.items()])
-            # Validate the cookie immediately
+            # Validate the cookie before returning
             if get_cookie_info(cookie):
                 return cookie
         return None
@@ -348,20 +328,20 @@ def bulk_cookie_getter():
         with ThreadPoolExecutor(max_workers=25) as executor:
             futures = []
             for email, password in accounts:
+                print(f"[cyan]Trying[/cyan] {email}")
                 futures.append(
                     executor.submit(get_cookie, email, password)
                 )
-                print(f"[cyan]Trying[/cyan] {email}")
             
             for future in as_completed(futures):
                 cookie = future.result()
                 if cookie:
                     valid_cookies.append(cookie)
+                    print(f"[green]Success - Cookie Retrieved")
                     success += 1
-                    print(f"[green]Success[/green] - Cookie Retrieved")
                 else:
+                    print(f"[red]Failed - Login Failed")
                     failed += 1
-                    print(f"[red]Failed[/red] - Login Failed")
         
         # Write all successful cookies at once
         if valid_cookies:
@@ -522,25 +502,27 @@ class FacebookShare:
         self.stats = stats
         self.session = requests.Session()
         self.headers = {
-            'user-agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Mobile Safari/537.36',
-            'sec-ch-ua': '"Google Chrome";v="107", "Chromium";v="107", "Not=A?Brand";v="24"',
+            'user-agent': generate_user_agent(),
+            'sec-ch-ua': '"Not_A Brand";v="8", "Chromium";v="120"',
             'sec-ch-ua-mobile': '?1',
-            'sec-ch-ua-platform': "Android",
-            'sec-fetch-dest': 'document',
-            'sec-fetch-mode': 'navigate',
-            'sec-fetch-site': 'none',
-            'sec-fetch-user': '?1',
-            'upgrade-insecure-requests': '1',
+            'sec-ch-ua-platform': '"Android"',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+            'Sec-Fetch-Site': 'none',
+            'Sec-Fetch-Mode': 'navigate',
+            'Sec-Fetch-User': '?1',
+            'Sec-Fetch-Dest': 'document',
+            'Accept-Encoding': 'gzip, deflate',
+            'Accept-Language': 'en-US,en;q=0.9',
             'cookie': self.cookie
         }
         self.session.headers.update(self.headers)
 
     def get_token(self):
         try:
-            response = self.session.get('https://business.facebook.com/content_management')
-            token_match = re.search('EAAG(.*?)","', response.text)
+            response = self.session.get('https://business.facebook.com/content_management', timeout=15)
+            token_match = re.search('EAAG\w+', response.text)
             if token_match:
-                return 'EAAG' + token_match.group(1)
+                return token_match.group()
             return None
         except Exception as e:
             print(f"Error getting token for cookie {self.cookie_index + 1}: {str(e)}")
@@ -561,12 +543,6 @@ class FacebookShare:
             pass
 
     def share_post(self):
-        # Validate cookie before starting
-        if not get_cookie_info(self.cookie):
-            self.stats.update_failed(self.cookie_index)
-            self.remove_cookie()
-            return
-
         token = self.get_token()
         if not token:
             self.stats.update_failed(self.cookie_index)
@@ -575,15 +551,19 @@ class FacebookShare:
 
         self.session.headers.update({
             'accept-encoding': 'gzip, deflate',
-            'host': 'b-graph.facebook.com'
+            'host': 'graph.facebook.com'
         })
 
         count = 0
         while count < self.share_count:
             try:
-                response = self.session.post(
-                    f'https://b-graph.facebook.com/me/feed?link=https://mbasic.facebook.com/{self.post_link}&published=0&access_token={token}'
-                )
+                post_data = {
+                    'privacy': '{"value":"EVERYONE"}',
+                    'message': '',
+                    'link': f'https://m.facebook.com/{self.post_link}',
+                    'access_token': token
+                }
+                response = self.session.post('https://graph.facebook.com/v18.0/me/feed', data=post_data, timeout=15)
                 data = response.json()
                 
                 if 'id' in data:
@@ -596,6 +576,7 @@ class FacebookShare:
                     self.stats.update_failed(self.cookie_index)
                     self.remove_cookie()
                     break
+                time.sleep(1)  # Add small delay between shares
                     
             except Exception as e:
                 print(f"Error sharing post with cookie {self.cookie_index + 1}: {str(e)}")
@@ -624,22 +605,46 @@ class ShareStats:
                 self.cookie_stats[cookie_index] = {"success": 0, "failed": 0}
             self.cookie_stats[cookie_index]["failed"] += 1
 
+def load_cookies():
+    try:
+        if not os.path.exists(COOKIE_PATH):
+            os.makedirs(os.path.dirname(COOKIE_PATH), exist_ok=True)
+            with open(COOKIE_PATH, 'w') as f:
+                f.write("")
+            console.print(f"[green]Created empty cookie file at {COOKIE_PATH}")
+            console.print("[yellow]Please add your cookies to the file and run the script again")
+            return None
+            
+        with open(COOKIE_PATH, 'r') as f:
+            cookies = [line.strip() for line in f if line.strip()]
+        
+        if not cookies:
+            console.print("[yellow]No cookies found in cookie.txt")
+            console.print("[yellow]Use Bulk Cookie Getter or add cookies manually")
+            return None
+            
+        console.print(f"[green]Successfully loaded {len(cookies)} cookies")
+        return cookies
+    except Exception as e:
+        console.print(f"[red]Error loading cookies: {str(e)}")
+        return None
+
 def main():
     try:
         banner()
         
-        if not validate_cookie_file():
-            print(Panel("[red]No valid cookies found or all cookies are dead/blocked!\n[white]Please get new cookies.", 
+        # Validate cookies first
+        valid_cookies = validate_cookies()
+        if not valid_cookies:
+            print(Panel("[red]No valid cookies found. Please add new cookies.", 
                 title="[bright_white]>> [Error] <<",
                 width=65,
                 style="bold bright_white"
             ))
             return
 
-        config['cookies'] = load_cookies()
-        if not config['cookies']:
-            return
-
+        config['cookies'] = valid_cookies
+        
         print(Panel("[white]Enter Post Link", 
             title="[bright_white]>> [Post Configuration] <<",
             width=65,
