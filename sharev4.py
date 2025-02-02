@@ -106,57 +106,8 @@ def get_cookie_info(cookie):
     except:
         return None
 
-def check_and_clean_cookies():
-    try:
-        if os.path.exists(COOKIE_PATH):
-            with open(COOKIE_PATH, 'r') as f:
-                cookies = [line.strip() for line in f if line.strip()]
-            
-            valid_cookies = []
-            dead_cookies = []
-            
-            for cookie in cookies:
-                if get_cookie_info(cookie):
-                    valid_cookies.append(cookie)
-                else:
-                    dead_cookies.append(cookie)
-            
-            if dead_cookies:
-                print(Panel(f"""[yellow]⚡[white] Dead cookies detected!
-[yellow]⚡[white] Valid cookies: [green]{len(valid_cookies)}
-[yellow]⚡[white] Dead cookies: [red]{len(dead_cookies)}
-
-[white]Remove dead cookies? (y/n)""",
-                    title="[bright_white]>> [Cookie Cleanup] <<",
-                    width=65,
-                    style="bold bright_white",
-                    subtitle="╭─────",
-                    subtitle_align="left"
-                ))
-                
-                choice = console.input("[bright_white]   ╰─> ")
-                if choice.lower() == 'y':
-                    with open(COOKIE_PATH, 'w') as f:
-                        for cookie in valid_cookies:
-                            f.write(cookie + '\n')
-                    print(Panel("[green]Dead cookies removed successfully!", 
-                        title="[bright_white]>> [Success] <<",
-                        width=65,
-                        style="bold bright_white"
-                    ))
-                    time.sleep(2)
-                    return True
-    except Exception as e:
-        print(Panel(f"[red]Error checking cookies: {str(e)}", 
-            title="[bright_white]>> [Error] <<",
-            width=65,
-            style="bold bright_white"
-        ))
-    return False
-
 #-----------------------------[CREATE REQUIRED FILES]-----------------------------------#
 def create_required_files():
-    # Create cookie.txt if not exists
     os.makedirs(os.path.dirname(COOKIE_PATH), exist_ok=True)
     if not os.path.exists(COOKIE_PATH):
         with open(COOKIE_PATH, 'w') as f:
@@ -166,8 +117,10 @@ def create_required_files():
     if not os.path.exists(ACCOUNTS_PATH):
         with open(ACCOUNTS_PATH, 'w') as f:
             f.write("# Format your accounts like this:\n")
-            f.write("e:example123@gmail.com p:12345\n")
-            f.write("e:another@gmail.com p:password123\n")
+            f.write("e : email@example.com\n")
+            f.write("p : password123\n")
+            f.write("e : another@email.com\n")
+            f.write("p : anotherpass\n")
 
 #-----------------------------[COOKIE GETTER]-----------------------------------#
 def generate_user_agent():
@@ -237,28 +190,6 @@ def get_cookie(uid, pww, ua=None):
     except:
         return None
 
-def process_account(account):
-    try:
-        if "e:" not in account or "p:" not in account:
-            return None
-            
-        email = account.split("e:")[1].split(" p:")[0].strip()
-        password = account.split("p:")[1].strip()
-        
-        print(f"[cyan]Trying[/cyan] {email}")
-        cookie = get_cookie(email, password)
-        
-        if cookie:
-            print(f"[green]Success[/green] {email}")
-            return cookie
-        else:
-            print(f"[red]Failed[/red] {email}")
-            return None
-            
-    except Exception as e:
-        print(f"[red]Error[/red] with account: {str(e)}")
-        return None
-
 def bulk_cookie_getter():
     try:
         banner()
@@ -278,10 +209,26 @@ def bulk_cookie_getter():
             return
             
         with open(ACCOUNTS_PATH, "r") as f:
-            accounts = [line.strip() for line in f if line.strip() and not line.startswith("#")]
+            lines = f.readlines()
+            
+        # Process lines in pairs
+        accounts = []
+        current_email = None
+        
+        for line in lines:
+            line = line.strip()
+            if not line or line.startswith('#'):
+                continue
+                
+            if line.startswith("e :"):
+                current_email = line.split("e :")[1].strip()
+            elif line.startswith("p :") and current_email:
+                password = line.split("p :")[1].strip()
+                accounts.append((current_email, password))
+                current_email = None
             
         if not accounts:
-            print(Panel("[red]No accounts found in accounts.txt!\n[white]Please add accounts with format:\n[cyan]e:email@example.com p:password", 
+            print(Panel("[red]No valid accounts found in accounts.txt!\n[white]Please use format:\n[cyan]e : email@example.com\np : password123", 
                 title="[bright_white]>> [Error] <<",
                 width=65,
                 style="bold bright_white"
@@ -298,17 +245,24 @@ def bulk_cookie_getter():
         failed = 0
         valid_cookies = []
         
-        # Use ThreadPoolExecutor for parallel processing
-        with ThreadPoolExecutor(max_workers=25) as executor:  # Increased workers for faster processing
-            future_to_account = {executor.submit(process_account, account): account for account in accounts}
+        # Process accounts
+        with ThreadPoolExecutor(max_workers=25) as executor:
+            futures = []
+            for email, password in accounts:
+                futures.append(
+                    executor.submit(get_cookie, email, password)
+                )
+                print(f"[cyan]Trying[/cyan] {email}")
             
-            for future in as_completed(future_to_account):
+            for future in as_completed(futures):
                 cookie = future.result()
                 if cookie:
                     valid_cookies.append(cookie)
                     success += 1
+                    print(f"[green]Success[/green] - Cookies Retrieved")
                 else:
                     failed += 1
+                    print(f"[red]Failed[/red] - Login Failed")
         
         # Write all successful cookies at once
         if valid_cookies:
@@ -434,10 +388,6 @@ def banner():
         width=65,
         style="bold bright_white",
     ))
-    
-    # Check for dead cookies and prompt for cleanup
-    if cookie_count > 0 and active_cookies < cookie_count:
-        check_and_clean_cookies()
 
 def show_main_menu():
     print(Panel("""[1] Start Share Process
@@ -601,14 +551,41 @@ def main():
         if not config['cookies']:
             return
 
-        print(Panel("[white]Loading cookies...", 
+        # Validate cookies before starting
+        print(Panel("[white]Validating cookies...", 
             title="[bright_white]>> [Process] <<",
             width=65,
             style="bold bright_white"
         ))
-        loading_animation(2, "Processing cookies...")
-        print(Panel(f"""[green]Cookies loaded successfully!
-[yellow]⚡[white] Total cookies: [cyan]{len(config['cookies'])}""",
+        
+        valid_cookies = []
+        dead_cookies = 0
+        
+        for cookie in config['cookies']:
+            if get_cookie_info(cookie):
+                valid_cookies.append(cookie)
+            else:
+                dead_cookies += 1
+
+        if dead_cookies > 0:
+            # Update cookie file with only valid cookies
+            with open(COOKIE_PATH, 'w') as f:
+                for cookie in valid_cookies:
+                    f.write(cookie + '\n')
+            
+            config['cookies'] = valid_cookies
+            
+        if not valid_cookies:
+            print(Panel("[red]No valid cookies found! Please get new cookies.", 
+                title="[bright_white]>> [Error] <<",
+                width=65,
+                style="bold bright_white"
+            ))
+            return
+
+        print(Panel(f"""[green]Cookies validated!
+[yellow]⚡[white] Active cookies: [green]{len(valid_cookies)}
+[yellow]⚡[white] Dead removed: [red]{dead_cookies}""",
             title="[bright_white]>> [Success] <<",
             width=65,
             style="bold bright_white"
