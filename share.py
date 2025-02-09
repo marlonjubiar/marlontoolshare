@@ -18,7 +18,6 @@ console = Console()
 os.system('clear')
 
 TOKEN_PATH = '/storage/emulated/0/a/token.txt'
-GLOBAL_SHARE_COUNT_FILE = 'global_share_count.json'
 
 config = {
     'post_id': '',
@@ -36,13 +35,13 @@ def validate_post_id(post_id: str) -> bool:
 def validate_share_count(count: str) -> bool:
     try:
         count = int(count)
-        return 0 < count <= 1000
+        return count > 0
     except ValueError:
         return False
 
 def get_system_info() -> Dict[str, str]:
     try:
-        ip_info = requests.get('https://ipapi.co/json/', timeout=5).json()
+        ip_info = requests.get('https://ipapi.co/json/').json()
         ph_tz = pytz.timezone('Asia/Manila')
         ph_time = datetime.now(ph_tz)
         return {
@@ -113,39 +112,13 @@ def load_tokens() -> List[str]:
         ))
         return []
 
-def load_global_share_count() -> int:
-    try:
-        if os.path.exists(GLOBAL_SHARE_COUNT_FILE):
-            with open(GLOBAL_SHARE_COUNT_FILE, 'r') as f:
-                data = json.load(f)
-                return int(data.get('count', 0))
-        return 0
-    except Exception as e:
-        console.print(Panel(f"[red]Error loading share count: {str(e)}", 
-            title="[bright_white]>> [Error] <<",
-            width=65,
-            style="bold bright_white"
-        ))
-        return 0
-
-def save_global_share_count(count: int):
-    try:
-        with open(GLOBAL_SHARE_COUNT_FILE, 'w') as f:
-            json.dump({'count': count}, f)
-    except Exception as e:
-        console.print(Panel(f"[red]Error saving share count: {str(e)}", 
-            title="[bright_white]>> [Error] <<",
-            width=65,
-            style="bold bright_white"
-        ))
-
 class ShareManager:
     def __init__(self):
-        self.global_share_count = load_global_share_count()
         self.error_count = 0
         self.success_count = 0
+        self.total_shares = 0
         
-    async def share(self, session: aiohttp.ClientSession, token: str, share_count: int):
+    async def share(self, session: aiohttp.ClientSession, token: str, target_shares: int):
         headers = {
             'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Safari/537.36',
             'sec-ch-ua': '"Google Chrome";v="107", "Chromium";v="107", "Not=A?Brand";v="24"',
@@ -160,8 +133,7 @@ class ShareManager:
             'host': 'graph.facebook.com'
         }
         
-        retries = 3
-        while config['total_shares'] < config['target_shares'] and retries > 0:
+        while True:
             try:
                 async with session.post(
                     'https://graph.facebook.com/me/feed',
@@ -171,27 +143,26 @@ class ShareManager:
                         'access_token': token
                     },
                     headers=headers,
-                    timeout=30
+                    timeout=10
                 ) as response:
                     data = await response.json()
                     if 'id' in data:
-                        config['total_shares'] += 1
-                        self.global_share_count += 1
                         self.success_count += 1
-                        save_global_share_count(self.global_share_count)
-                        
+                        self.total_shares += 1
                         timestamp = datetime.now().strftime("%H:%M:%S")
-                        console.print(f"[cyan][{timestamp}][/cyan][green] Share Completed [yellow]{config['post_id']} [red]{config['total_shares']}/{config['target_shares']}")
+                        console.print(f"[cyan][{timestamp}][/cyan][green] Share Completed [yellow]{config['post_id']} [red]{self.total_shares}/{target_shares}")
+                        
+                        if self.total_shares >= target_shares:
+                            return
                     else:
                         self.error_count += 1
-                        retries -= 1
                         if 'error' in data:
-                            console.print(f"[red]Error: {data['error'].get('message', 'Unknown error')}")
-            except Exception as e:
+                            error_msg = data['error'].get('message', 'Unknown error')
+                            if "Error validating access token" in error_msg or "blocking" in error_msg:
+                                return
+            except:
                 self.error_count += 1
-                retries -= 1
-                console.print(f"[red]Share failed: {str(e)}")
-                await asyncio.sleep(1)
+                continue
 
 async def get_user_input(prompt: str, validator_func, error_message: str) -> Optional[str]:
     while True:
@@ -216,71 +187,85 @@ async def get_user_input(prompt: str, validator_func, error_message: str) -> Opt
                 style="bold bright_white"
             ))
 
+async def boost_again() -> bool:
+    print(Panel("[white]Do you want to boost again? (y/n)", 
+        title="[bright_white]>> [Input] <<",
+        width=65,
+        style="bold bright_white",
+        subtitle="╭─────",
+        subtitle_align="left"
+    ))
+    response = console.input("[bright_white]   ╰─> ").lower()
+    return response == 'y'
+
 async def main():
     try:
-        banner()
-        
-        config['tokens'] = load_tokens()
-        print(Panel(f"[white]Loaded [green]{len(config['tokens'])}[white] tokens", 
-            title="[bright_white]>> [Information] <<",
-            width=65,
-            style="bold bright_white"
-        ))
-        
-        if not config['tokens']:
-            print(Panel("[red]No tokens available! Please add tokens to the token file first.", 
-                title="[bright_white]>> [Error] <<",
+        while True:
+            banner()
+            
+            config['tokens'] = load_tokens()
+            print(Panel(f"[white]Loaded [green]{len(config['tokens'])}[white] tokens", 
+                title="[bright_white]>> [Information] <<",
                 width=65,
                 style="bold bright_white"
             ))
-            return
             
-        config['post_id'] = await get_user_input(
-            "[white]Enter Post ID",
-            validate_post_id,
-            "Invalid Post ID format. Please enter a valid numeric Post ID."
-        )
-        
-        if not config['post_id']:
-            return
+            if not config['tokens']:
+                print(Panel("[red]No tokens available! Please add tokens to the token file first.", 
+                    title="[bright_white]>> [Error] <<",
+                    width=65,
+                    style="bold bright_white"
+                ))
+                return
+                
+            config['post_id'] = await get_user_input(
+                "[white]Enter Post ID",
+                validate_post_id,
+                "Invalid Post ID format. Please enter a valid numeric Post ID."
+            )
             
-        share_count_input = await get_user_input(
-            "[white]Enter shares per token (1-1000)",
-            validate_share_count,
-            "Invalid share count. Please enter a number between 1 and 1000."
-        )
-        
-        if not share_count_input:
-            return
+            if not config['post_id']:
+                return
+                
+            share_count_input = await get_user_input(
+                "[white]Enter total shares (no limit)",
+                validate_share_count,
+                "Invalid share count. Please enter a positive number."
+            )
             
-        share_count = int(share_count_input)
-        config['target_shares'] = share_count * len(config['tokens'])
-        
-        print(Panel(
-            f"[white]Starting share process...\nTarget: [green]{config['target_shares']}[white] shares", 
-            title="[bright_white]>> [Process Started] <<",
-            width=65,
-            style="bold bright_white"
-        ))
-        
-        share_manager = ShareManager()
-        
-        async with aiohttp.ClientSession() as session:
-            tasks = []
-            for token in config['tokens']:
-                task = asyncio.create_task(share_manager.share(session, token, share_count))
-                tasks.append(task)
-            await asyncio.gather(*tasks)
-        
-        print(Panel(
-            f"""[green]Process completed!
-[white]Total shares: [green]{share_manager.global_share_count}
-[white]Successful: [green]{share_manager.success_count}
-[white]Failed: [red]{share_manager.error_count}""", 
-            title="[bright_white]>> [Completed] <<",
-            width=65,
-            style="bold bright_white"
-        ))
+            if not share_count_input:
+                return
+                
+            target_shares = int(share_count_input)
+            
+            print(Panel(
+                f"[white]Starting share process...\nTarget: [green]{target_shares}[white] shares", 
+                title="[bright_white]>> [Process Started] <<",
+                width=65,
+                style="bold bright_white"
+            ))
+            
+            share_manager = ShareManager()
+            
+            connector = aiohttp.TCPConnector(limit=0)
+            timeout = aiohttp.ClientTimeout(total=10)
+            
+            async with aiohttp.ClientSession(connector=connector, timeout=timeout) as session:
+                tasks = []
+                for token in config['tokens']:
+                    task = asyncio.create_task(share_manager.share(session, token, target_shares))
+                    tasks.append(task)
+                await asyncio.gather(*tasks)
+            
+            print(Panel(
+                f"""[green]PROCESS COMPLETED (≧▽≦)""", 
+                title="[bright_white]>> [Completed] <<",
+                width=65,
+                style="bold bright_white"
+            ))
+            
+            if not await boost_again():
+                break
 
     except KeyboardInterrupt:
         print(Panel("[white]Script terminated by user", 
