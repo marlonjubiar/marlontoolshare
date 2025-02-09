@@ -105,7 +105,7 @@ def load_tokens() -> List[str]:
                 return [line.strip() for line in f if line.strip()]
         return []
     except Exception as e:
-        console.print(Panel(f"[red]Error loading tokens: {str(e)}", 
+        console.print(Panel(f"[red]Error loading tokens: {str(e)} (｡•́︿•̀｡)", 
             title="[bright_white]>> [Error] <<",
             width=65,
             style="bold bright_white"
@@ -166,8 +166,17 @@ class ShareManager:
 
 async def get_user_input(prompt: str, validator_func, error_message: str) -> Optional[str]:
     while True:
+        os.system('clear')
+        banner()
+        
+        print(Panel(f"[white]Loaded [green]{len(config['tokens'])}[white] tokens ⚡", 
+            title="[bright_white]>> [Information] <<",
+            width=65,
+            style="bold bright_white"
+        ))
+        
         print(Panel(prompt, 
-            title="[bright_white]>> [Input] <<",
+            title="[bright_white]>> [Input] (｡♡‿♡｡) <<",
             width=65,
             style="bold bright_white",
             subtitle="╭─────",
@@ -181,14 +190,15 @@ async def get_user_input(prompt: str, validator_func, error_message: str) -> Opt
         if validator_func(user_input):
             return user_input
         else:
-            print(Panel(f"[red]{error_message}", 
+            print(Panel(f"[red]{error_message} (｡•́︿•̀｡)", 
                 title="[bright_white]>> [Error] <<",
                 width=65,
                 style="bold bright_white"
             ))
+            await asyncio.sleep(2)
 
 async def boost_again() -> bool:
-    print(Panel("[white]Do you want to boost again? (y/n)", 
+    print(Panel("[white]Do you want to boost again? (y/n) (◕‿◕✿)", 
         title="[bright_white]>> [Input] <<",
         width=65,
         style="bold bright_white",
@@ -204,14 +214,14 @@ async def main():
             banner()
             
             config['tokens'] = load_tokens()
-            print(Panel(f"[white]Loaded [green]{len(config['tokens'])}[white] tokens", 
+            print(Panel(f"[white]Loaded [green]{len(config['tokens'])}[white] tokens ⚡", 
                 title="[bright_white]>> [Information] <<",
                 width=65,
                 style="bold bright_white"
             ))
             
             if not config['tokens']:
-                print(Panel("[red]No tokens available! Please add tokens to the token file first.", 
+                print(Panel("[red]No tokens available! Please add tokens to the token file first. (｡•́︿•̀｡)", 
                     title="[bright_white]>> [Error] <<",
                     width=65,
                     style="bold bright_white"
@@ -219,7 +229,7 @@ async def main():
                 return
                 
             config['post_id'] = await get_user_input(
-                "[white]Enter Post ID",
+                "[white]Enter Post ID (づ｡◕‿‿◕｡)づ",
                 validate_post_id,
                 "Invalid Post ID format. Please enter a valid numeric Post ID."
             )
@@ -228,7 +238,7 @@ async def main():
                 return
                 
             share_count_input = await get_user_input(
-                "[white]Enter total shares (no limit)",
+                "[white]Enter total shares (no limit) (ﾉ◕ヮ◕)ﾉ*:･ﾟ✧",
                 validate_share_count,
                 "Invalid share count. Please enter a positive number."
             )
@@ -239,7 +249,8 @@ async def main():
             target_shares = int(share_count_input)
             
             print(Panel(
-                f"[white]Starting share process...\nTarget: [green]{target_shares}[white] shares", 
+                f"""[white]Starting share process... (ง •̀ω•́)ง✧
+Target: [green]{target_shares}[white] shares""", 
                 title="[bright_white]>> [Process Started] <<",
                 width=65,
                 style="bold bright_white"
@@ -257,8 +268,11 @@ async def main():
                     tasks.append(task)
                 await asyncio.gather(*tasks)
             
+            os.system('clear')
+            banner()
             print(Panel(
-                f"""[green]PROCESS COMPLETED (≧▽≦)""", 
+                f"""[green]PROCESS COMPLETED (≧▽≦)
+[white]Time to celebrate! ♪┏(・o･)┛♪┗ ( ･o･) ┓♪""", 
                 title="[bright_white]>> [Completed] <<",
                 width=65,
                 style="bold bright_white"
@@ -268,19 +282,19 @@ async def main():
                 break
 
     except KeyboardInterrupt:
-        print(Panel("[white]Script terminated by user", 
+        print(Panel("[white]Script terminated by user (╥﹏╥)", 
             title="[bright_white]>> [Terminated] <<",
             width=65,
             style="bold bright_white"
         ))
     except Exception as e:
-        print(Panel(f"[red]{str(e)}", 
+        print(Panel(f"[red]{str(e)} (っ˘̩╭╮˘̩)っ", 
             title="[bright_white]>> [Error] <<",
             width=65,
             style="bold bright_white"
         ))
     finally:
-        print(Panel("[white]Press Enter to exit...", 
+        print(Panel("[white]Press Enter to exit... (｡•́︿•̀｡)", 
             title="[bright_white]>> [Exit] <<",
             width=65,
             style="bold bright_white",
